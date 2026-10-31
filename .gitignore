@@ -17,3 +17,6 @@ firmware/
 .DS_Store
 .idea/
 .vscode/
+
+# Worktrees spawned by the kanban dispatcher
+.worktrees/
