@@ -273,6 +273,19 @@ risk, for a card of its own on CT 912 (this card does not touch it):
 3. Upload while the user is still speaking — saves the ~50–100 ms WAV/HTTP
    upload, not the model time; not worth it before 1 or 2.
 
+**Re-measured 2026-10-31 14:38 (P3.2, read-only):** 20 calls → **1025 ms p50 /
+1131 ms p90** (min 912, max 1178), all transcripts identical. `/health` reports
+`{"model":"base"}`, so option 2 above is largely the status quo — the only
+remaining shrink is `tiny`, which carries real accuracy risk. And CT 914 cannot
+administer CT 912 (both SSH keys denied, no `pct`/`qm`), so this cannot be
+executed from a gateway card at all.
+
+**Decision (coordinator, 2026-10-31): measured, not changed.** The
+acknowledgement now puts the first audible word at 1.55 s with whisper inside
+that budget, so the remaining ~600 ms would buy little; the 7.1 s brain TTFT is
+the bottleneck that matters. `faster-whisper`/CTranslate2 `int8` on CT 912 stays
+a documented lever for a homelab card with shell access, not a gateway one.
+
 ### Item 4 — brain TTFT (default channel measured; lean profile proposed)
 
 The default device channel measured 7.1–9.8 s TTFT p50 (12.3–22.2 s p90) across
