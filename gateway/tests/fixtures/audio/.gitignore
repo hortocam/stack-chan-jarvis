@@ -1,3 +1,5 @@
 # Generated on demand by make_audio.py: 35 s of 16 kHz PCM16 is 1.1 MB, which is
 # not worth committing. Regenerate with `.venv/bin/python tests/fixtures/make_audio.py`.
+# Everything else in this directory is committed: the three short WAVs and the ten
+# 180-byte Opus packets in opus_16k_60ms/ (deterministic, see make_audio.py).
 long_35s.wav
