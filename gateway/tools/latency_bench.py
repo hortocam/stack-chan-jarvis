@@ -22,6 +22,13 @@ To measure one change at a time, override the configuration in the environment:
 
 ``--stt-only`` measures whisper alone on the same utterance (item 3 of the
 card) and prints its own percentile table.
+
+Every turn-mode run also asks the brain, on a throwaway session scope, for one
+``max_tokens: 1`` completion and prints ``usage.prompt_tokens`` for the channel
+(fresh scope), then once more on the run's own scope after the last turn. That
+is the number behind "~16.7 k prompt tokens per turn": the gateway's turn record
+carries timings, not usage, so the bench reads it from the server directly.
+``--no-prompt-probe`` skips both calls.
 """
 
 from __future__ import annotations
@@ -33,12 +40,15 @@ import logging
 import os
 import sys
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import aiohttp
 from aiohttp import web
 
+from jarvis_gateway.brain import session_key
 from jarvis_gateway.config import load_config
 from jarvis_gateway.stt import SttClient
 from jarvis_gateway.ws_app import create_app
@@ -115,6 +125,73 @@ def _summary(name: str, values: list[float]) -> str:
         f"  p90={_percentile(values, 0.9):7.0f} ms"
         f"  min={min(values):6.0f}  max={max(values):6.0f}"
     )
+
+
+#: How long one prompt probe may take.  The brain's TTFT p90 has been 22 s on
+#: this host; the probe adds only one token of generation on top of it.
+_PROBE_TIMEOUT_S = 120.0
+
+
+async def _prompt_tokens(
+    *,
+    base_url: str,
+    api_key: str,
+    model: str,
+    session_key: str,
+    timeout_s: float = _PROBE_TIMEOUT_S,
+) -> int | None:
+    """Prompt tokens the brain reports for one ``max_tokens: 1`` completion.
+
+    The server puts ``usage`` on the wire in the final SSE chunk
+    (``docs/hermes-api-notes.md``), but ``BrainReply`` keeps only the text, so
+    the bench asks the same URL itself, on the scope it names.  A reply that
+    carries no ``usage.prompt_tokens`` returns ``None`` so the caller can print
+    "unavailable" — never ``0`` and never an estimate.  The key is never part of
+    an error message.
+    """
+
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "X-Hermes-Session-Key": session_key,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    body = {
+        "model": model,
+        "stream": False,
+        "max_tokens": 1,
+        "messages": [{"role": "user", "content": "ping"}],
+    }
+    timeout = aiohttp.ClientTimeout(total=timeout_s)
+    async with aiohttp.ClientSession(timeout=timeout) as http:
+        async with http.post(url, json=body, headers=headers) as response:
+            if response.status != 200:
+                detail = (await response.read())[:200].decode("utf-8", "replace")
+                raise RuntimeError(
+                    f"prompt probe failed: brain returned {response.status}: {detail!r}"
+                )
+            document = await response.json(content_type=None)
+    usage = document.get("usage") if isinstance(document, dict) else None
+    value = usage.get("prompt_tokens") if isinstance(usage, dict) else None
+    return value if isinstance(value, int) else None
+
+
+async def _prompt_probe(config, scope: str, label: str) -> None:
+    """Print one probe; a failed probe must not end the latency run."""
+
+    try:
+        tokens = await _prompt_tokens(
+            base_url=config.hermes_base_url,
+            api_key=config.hermes_api_key,
+            model=config.hermes_model,
+            session_key=scope,
+        )
+    except Exception as exc:  # the measurement matters more than the probe
+        print(f"  prompt tokens ({label}): unavailable ({exc})", flush=True)
+        return
+    shown = tokens if tokens is not None else "unavailable (no usage in the reply)"
+    print(f"  prompt tokens ({label}): {shown}", flush=True)
 
 
 async def _monitor(device: DeviceClient, stop: asyncio.Event) -> list[tuple[str, float, Any]]:
@@ -209,6 +286,11 @@ async def _run_turns(args: argparse.Namespace, config) -> int:
         flush=True,
     )
 
+    if args.prompt_probe:
+        fresh_scope = f"stackchan-bench-probe-{uuid.uuid4().hex[:8]}"
+        print(f"latency_bench: prompt probe, fresh scope {fresh_scope}", flush=True)
+        await _prompt_probe(config, fresh_scope, "fresh scope")
+
     device = DeviceClient(
         ws_url,
         config.device_token,
@@ -228,6 +310,9 @@ async def _run_turns(args: argparse.Namespace, config) -> int:
         await device.close()
         await runner.cleanup()
         logger.removeHandler(handler)
+
+    if args.prompt_probe:
+        await _prompt_probe(config, session_key(device.device_id), f"after {len(records)} turns")
 
     out = Path(args.out)
     await asyncio.to_thread(
@@ -300,6 +385,13 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="device id sent in the handshake (default: the synthetic device's); "
         "use a distinct value per configuration so each run starts a fresh brain scope",
+    )
+    parser.add_argument(
+        "--no-prompt-probe",
+        dest="prompt_probe",
+        action="store_false",
+        help="skip the two usage.prompt_tokens probes (a fresh scope before the run, "
+        "the run's own scope after it); the probes are one max_tokens=1 turn each",
     )
     parser.add_argument(
         "--stt-only",
