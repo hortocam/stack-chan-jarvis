@@ -148,6 +148,27 @@ def opus_packets(count: int = 10) -> list[bytes]:
     return audio[:count]
 
 
+def speech_fixture(text: str, path: Path) -> None:
+    """Render real English speech with ffmpeg's flite filter (live tests only).
+
+    The other WAVs are synthetic tones: the VAD and the framing tests want a
+    deterministic envelope, and whisper correctly transcribes a tone as nothing.
+    A live transcription test needs actual words, so these two fixtures are
+    rendered from flite — no vendor, no account, byte-stable for a fixed text.
+    """
+
+    if shutil.which("ffmpeg") is None:
+        raise SystemExit("make_audio.py needs ffmpeg (with the flite filter) to render speech")
+    subprocess.run(
+        [
+            "ffmpeg", "-nostdin", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", f"flite=text='{text}':voice=slt",
+            "-ar", str(RATE), "-ac", "1", "-c:a", "pcm_s16le", str(path),
+        ],
+        check=True,
+    )  # fmt: skip
+
+
 def main() -> int:
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     OPUS_DIR.mkdir(parents=True, exist_ok=True)
@@ -161,6 +182,14 @@ def main() -> int:
     for name, samples in wavs.items():
         write_wav(AUDIO_DIR / name, samples)
         print(f"{name}: {len(samples)} samples, {len(samples) / RATE:.3f} s")
+
+    for name, text in (
+        ("utterance_speech.wav", "Jarvis, what is the weather like today?"),
+        ("remember_speech.wav", "Remember the word lantern. Reply with just the word stored."),
+        ("followup_speech.wav", "What word did I just ask you to remember?"),
+    ):
+        speech_fixture(text, AUDIO_DIR / name)
+        print(f"{name}: {text!r}")
 
     packets = opus_packets()
     if len(packets) != 10:

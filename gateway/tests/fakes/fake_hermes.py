@@ -34,6 +34,9 @@ class FakeHermes:
         error_after_first: bool = False,
         require_session_key: bool = True,
         model: str = "hermes-agent",
+        reasoning: str | None = None,
+        split_chunks: bool = False,
+        stall_after_last_s: float = 0.0,
         host: str = "127.0.0.1",
     ) -> None:
         self.tokens = list(tokens)
@@ -42,6 +45,12 @@ class FakeHermes:
         self.error_after_first = error_after_first
         self.require_session_key = require_session_key
         self.model = model
+        #: A ``reasoning_content`` delta written before any content delta (T011).
+        self.reasoning = reasoning
+        #: Write every SSE line in two pieces, split mid-line (partial-read test).
+        self.split_chunks = split_chunks
+        #: Keep the stream open (silent) this long after the last token, before [DONE].
+        self.stall_after_last_s = stall_after_last_s
         self.host = host
         self.requests: list[dict[str, Any]] = []
         self._runner: web.AppRunner | None = None
@@ -88,15 +97,26 @@ class FakeHermes:
     async def _handle_health(self, request: web.Request) -> web.Response:
         return web.json_response({"status": "ok"})
 
-    def _chunk(self, token: str) -> bytes:
+    def _chunk(self, token: str, *, field: str = "content") -> bytes:
         payload = {
             "id": "chatcmpl-fake",
             "object": "chat.completion.chunk",
             "created": int(time.time()),
             "model": self.model,
-            "choices": [{"index": 0, "delta": {"content": token}, "finish_reason": None}],
+            "choices": [{"index": 0, "delta": {field: token}, "finish_reason": None}],
         }
         return f"data: {json.dumps(payload)}\n\n".encode()
+
+    async def _write(self, response: web.StreamResponse, payload: bytes) -> None:
+        """Write one SSE event, optionally split across two writes."""
+
+        if self.split_chunks and len(payload) > 2:
+            middle = len(payload) // 2
+            await response.write(payload[:middle])
+            await asyncio.sleep(0.001)
+            await response.write(payload[middle:])
+        else:
+            await response.write(payload)
 
     async def _handle_chat(self, request: web.Request) -> web.StreamResponse:
         body = await request.json()
@@ -129,16 +149,23 @@ class FakeHermes:
         )
         await response.prepare(request)
 
+        if self.reasoning:
+            await self._write(response, self._chunk(self.reasoning, field="reasoning_content"))
+            await response.write(b": reasoning done\n\n")
+
         for index, token in enumerate(self.tokens):
             if index and self.pacing_s:
                 await asyncio.sleep(self.pacing_s)
-            await response.write(self._chunk(token))
+            await self._write(response, self._chunk(token))
             record["streamed_tokens"] += 1
             if self.error_after_first and index == 0:
                 # The upstream dies mid-stream: no [DONE], connection closed.
                 await response.write_eof()
                 return response
 
-        await response.write(b"data: [DONE]\n\n")
+        if self.stall_after_last_s:
+            await asyncio.sleep(self.stall_after_last_s)
+
+        await self._write(response, b"data: [DONE]\n\n")
         await response.write_eof()
         return response

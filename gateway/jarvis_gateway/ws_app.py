@@ -1,8 +1,14 @@
-"""aiohttp application shell: health, OTA stub, voice handshake and dispatch (T015).
+"""aiohttp application shell: health, OTA stub, voice handshake and dispatch.
 
 This is the only inbound listener the project adds (constitution I, plan D13).
 The handshake is decided before the WebSocket is upgraded: a wrong or missing
 token is an HTTP 401 and creates no session state (FR-002, SC-007).
+
+After the hello, the dispatch loop owns the audio path: binary frames are Opus
+at 16 kHz, 60 ms each, decoded and fed to the energy VAD; a completed utterance
+(server VAD, the device's ``listen stop``, or the 30 s cap) becomes a turn.
+Frames are only accepted in ``LISTENING``, so a late device packet cannot
+corrupt a turn (plan "State machine").
 
 The OTA handler here is the T015 stub with the shape plan C1 fixes; T031
 replaces it with the config/body-driven manifest. It is deliberately not
@@ -12,6 +18,7 @@ exported as the final implementation.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hmac
 import json
 import logging
@@ -22,6 +29,8 @@ from typing import Any
 from aiohttp import WSMsgType, web
 
 from . import __version__
+from .audio import UPLINK_RATE, AudioError, OpusDecoder
+from .brain import BrainClient
 from .config import Config
 from .protocol import (
     Abort,
@@ -34,10 +43,35 @@ from .protocol import (
     server_hello,
 )
 from .session import DeviceSession, SessionRegistry, SessionState
+from .stt import SttClient
+from .tts import EdgeTts, TtsEngine
+from .turn import TurnRunner
+from .vad import Vad, frame_rms
 
-__all__ = ["HELLO_TIMEOUT_S", "create_app", "run"]
+__all__ = [
+    "BRAIN",
+    "CONFIG",
+    "CONNECTIONS",
+    "HELLO_TIMEOUT_S",
+    "REGISTRY",
+    "STT",
+    "TTS",
+    "create_app",
+    "run",
+]
 
 logger = logging.getLogger(__name__)
+
+# aiohttp 3.9+ asks for typed application keys; string keys emit NotAppKeyWarning.
+CONFIG = web.AppKey("config", Config)
+CLOCK = web.AppKey("clock", Any)
+STARTED_AT = web.AppKey("started_at", float)
+HELLO_TIMEOUT = web.AppKey("hello_timeout", float)
+CONNECTIONS = web.AppKey("connections", dict)
+REGISTRY = web.AppKey("registry", SessionRegistry)
+STT = web.AppKey("stt", Any)
+BRAIN = web.AppKey("brain", Any)
+TTS = web.AppKey("tts", Any)
 
 HELLO_TIMEOUT_S = 10.0
 MAX_MESSAGE_BYTES = 64 * 1024
@@ -65,7 +99,7 @@ def _token_matches(expected: str, provided: str | None) -> bool:
 def _handshake_refusal(request: web.Request) -> web.Response | None:
     """Return the pre-upgrade refusal, or ``None`` when the handshake may proceed."""
 
-    config: Config = request.app["config"]
+    config: Config = request.app[CONFIG]
     if not _token_matches(config.device_token, _bearer(request.headers)):
         return web.Response(status=401, text="unauthorized")
 
@@ -119,40 +153,166 @@ async def _read_hello(ws: web.WebSocketResponse, limit_s: float) -> Hello | None
         raise _ProtocolViolation(1008, "hello must be the first message")
 
 
-async def _dispatch(session: DeviceSession, ws: web.WebSocketResponse) -> None:
-    """The post-hello loop. User-story handlers attach here in later tasks."""
+class _TurnRuntime:
+    """Per-connection audio state: decoder, VAD, write lock and the turn task."""
 
-    while not ws.closed:
-        message = await ws.receive()
-        if message.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED, WSMsgType.ERROR):
-            return
-        session.touch()
-        if message.type is WSMsgType.BINARY:
-            if len(message.data) > MAX_MESSAGE_BYTES:
-                raise _ProtocolViolation(1008, "audio frame too large")
-            # The audio path lands with US1 (T020+); frames are dropped until then.
-            continue
-        if message.type is not WSMsgType.TEXT:
-            continue
-        if len(message.data) > MAX_MESSAGE_BYTES:
-            raise _ProtocolViolation(1008, "message too large")
+    def __init__(self, config: Config) -> None:
+        self.decoder = OpusDecoder(UPLINK_RATE)
+        self.vad = Vad(
+            silence_ms=config.vad_silence_ms,
+            min_speech_ms=config.vad_min_speech_ms,
+            max_utterance_s=config.max_utterance_s,
+        )
+        self.lock = asyncio.Lock()
+        self.turn_task: asyncio.Task | None = None
+        self.last_voiced_at: float | None = None
+
+    def turn_running(self) -> bool:
+        return self.turn_task is not None and not self.turn_task.done()
+
+
+async def _dispatch(
+    session: DeviceSession, ws: web.WebSocketResponse, *, config: Config, app: web.Application
+) -> None:
+    """The post-hello loop: audio in, VAD, turns out, device messages dispatched."""
+
+    runtime = _TurnRuntime(config)
+
+    async def send_json(payload: dict[str, Any]) -> None:
+        async with runtime.lock:
+            if not ws.closed:
+                await ws.send_str(encode(payload))
+
+    async def send_bytes(packet: bytes) -> None:
+        async with runtime.lock:
+            if not ws.closed:
+                await ws.send_bytes(packet)
+
+    async def run_turn(utterance, vad_end_ms: float) -> None:
+        session.utterance = utterance
+        session.state = SessionState.THINKING
+        runner = TurnRunner(
+            config=config,
+            session_id=session.session_id,
+            device_id=session.device_id,
+            stt=app[STT],
+            brain=app[BRAIN],
+            tts=app[TTS],
+            send_json=send_json,
+            send_bytes=send_bytes,
+        )
         try:
-            parsed = parse_device_message(message.data)
-        except ProtocolError as exc:
-            raise _ProtocolViolation(1003, str(exc)) from exc
-        if parsed is None:
-            continue
-        if isinstance(parsed, Listen):
-            if parsed.state == "start":
-                session.state = SessionState.LISTENING
-            elif session.state is SessionState.LISTENING:
+            await runner.run(utterance, vad_end_ms=vad_end_ms)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # never let one turn kill the session (FR-018)
+            logger.exception("turn failed", extra={"session_id": session.session_id})
+        finally:
+            session.utterance = None
+            session.turn = None
+            if session.state is not SessionState.CLOSED:
                 session.state = SessionState.IDLE
-        elif isinstance(parsed, Abort):
-            logger.debug("abort received with no turn in flight")
-        elif isinstance(parsed, Mcp):
-            logger.debug("mcp payload received before the MCP client lands")
-        elif isinstance(parsed, Hello):
-            logger.debug("duplicate hello ignored")
+
+    def start_turn(utterance, ended_at: float) -> None:
+        if runtime.turn_running():
+            logger.warning(
+                "utterance completed while a turn was running; dropping it",
+                extra={"session_id": session.session_id},
+            )
+            return
+        last_voiced = runtime.last_voiced_at if runtime.last_voiced_at is not None else ended_at
+        vad_end_ms = max(0.0, (ended_at - last_voiced) * 1000.0)
+        runtime.last_voiced_at = None
+        session.state = SessionState.THINKING
+        runtime.turn_task = asyncio.create_task(run_turn(utterance, vad_end_ms))
+        session.turn = runtime.turn_task
+
+    def offer(utterance, ended_at: float) -> None:
+        if utterance is None:
+            return
+        if utterance.too_short or not utterance.pcm:
+            logger.debug(
+                "utterance discarded",
+                extra={"reason": utterance.reason, "voiced_ms": utterance.voiced_ms},
+            )
+            return
+        start_turn(utterance, ended_at)
+
+    try:
+        while not ws.closed:
+            message = await ws.receive()
+            if message.type in (
+                WSMsgType.CLOSE,
+                WSMsgType.CLOSING,
+                WSMsgType.CLOSED,
+                WSMsgType.ERROR,
+            ):
+                return
+            session.touch()
+            if message.type is WSMsgType.BINARY:
+                if len(message.data) > MAX_MESSAGE_BYTES:
+                    raise _ProtocolViolation(1008, "audio frame too large")
+                # Invariant: audio is only accepted while listening. A frame that
+                # arrives in THINKING/SPEAKING is dropped, never queued.
+                if session.state is not SessionState.LISTENING:
+                    continue
+                try:
+                    pcm = runtime.decoder.decode(message.data)
+                except AudioError as exc:
+                    logger.debug("dropping undecodable Opus frame: %s", exc)
+                    continue
+                now = asyncio.get_running_loop().time()
+                if frame_rms(pcm) >= runtime.vad.config.continue_rms:
+                    runtime.last_voiced_at = now
+                utterance = runtime.vad.push(pcm)
+                if utterance is not None:
+                    offer(utterance, now)
+                continue
+            if message.type is not WSMsgType.TEXT:
+                continue
+            if len(message.data) > MAX_MESSAGE_BYTES:
+                raise _ProtocolViolation(1008, "message too large")
+            try:
+                parsed = parse_device_message(message.data)
+            except ProtocolError as exc:
+                raise _ProtocolViolation(1003, str(exc)) from exc
+            if parsed is None:
+                continue
+            if isinstance(parsed, Listen):
+                if parsed.state == "start":
+                    if runtime.turn_running():
+                        # Barge-in is US3 (T038); until then a new question waits.
+                        logger.debug("listen start ignored while a turn is running")
+                        continue
+                    runtime.vad.reset()
+                    runtime.last_voiced_at = None
+                    session.state = SessionState.LISTENING
+                elif parsed.state == "stop":
+                    if session.state is not SessionState.LISTENING:
+                        logger.debug("listen stop ignored: no utterance is open")
+                        continue
+                    now = asyncio.get_running_loop().time()
+                    utterance = runtime.vad.finish("stop")
+                    if utterance is None:
+                        session.state = SessionState.IDLE
+                    else:
+                        offer(utterance, now)
+                        if not runtime.turn_running():
+                            session.state = SessionState.IDLE
+                else:  # detect: the wake word; cancellation lands in T038
+                    logger.debug("listen detect ignored until barge-in lands")
+            elif isinstance(parsed, Abort):
+                logger.debug("abort received with no cancellation handler yet")
+            elif isinstance(parsed, Mcp):
+                logger.debug("mcp payload received before the MCP client lands")
+            elif isinstance(parsed, Hello):
+                logger.debug("duplicate hello ignored")
+    finally:
+        if runtime.turn_task is not None:
+            runtime.turn_task.cancel()
+            with contextlib.suppress(BaseException):
+                await runtime.turn_task
+        runtime.decoder.close()
 
 
 async def websocket_handler(request: web.Request) -> web.StreamResponse:
@@ -160,8 +320,8 @@ async def websocket_handler(request: web.Request) -> web.StreamResponse:
     if refusal is not None:
         return refusal
 
-    registry: SessionRegistry = request.app["registry"]
-    connections: dict[str, web.WebSocketResponse] = request.app["connections"]
+    registry: SessionRegistry = request.app[REGISTRY]
+    connections: dict[str, web.WebSocketResponse] = request.app[CONNECTIONS]
     device_id = request.headers["Device-Id"].strip()
     client_id = request.headers["Client-Id"].strip()
 
@@ -169,7 +329,7 @@ async def websocket_handler(request: web.Request) -> web.StreamResponse:
     await ws.prepare(request)
 
     try:
-        hello = await _read_hello(ws, request.app["hello_timeout"])
+        hello = await _read_hello(ws, request.app[HELLO_TIMEOUT])
     except _ProtocolViolation as exc:
         if exc.code != 1000:
             await ws.close(code=exc.code, message=exc.message.encode()[:120])
@@ -198,7 +358,7 @@ async def websocket_handler(request: web.Request) -> web.StreamResponse:
 
     violation: _ProtocolViolation | None = None
     try:
-        await _dispatch(session, ws)
+        await _dispatch(session, ws, config=request.app[CONFIG], app=request.app)
     except _ProtocolViolation as exc:
         violation = exc
     finally:
@@ -216,13 +376,13 @@ async def websocket_handler(request: web.Request) -> web.StreamResponse:
 
 
 async def healthz(request: web.Request) -> web.Response:
-    registry: SessionRegistry = request.app["registry"]
-    clock = request.app["clock"]
+    registry: SessionRegistry = request.app[REGISTRY]
+    clock = request.app[CLOCK]
     return web.json_response(
         {
             "status": "ok",
             "version": __version__,
-            "uptime_s": round(clock() - request.app["started_at"], 3),
+            "uptime_s": round(clock() - request.app[STARTED_AT], 3),
             "sessions": len(registry),
         }
     )
@@ -244,7 +404,7 @@ def _websocket_url(config: Config) -> str:
 async def ota_stub(request: web.Request) -> web.Response:
     """T015's fixed manifest; T031 replaces this handler with ``ota.py``'s."""
 
-    config: Config = request.app["config"]
+    config: Config = request.app[CONFIG]
     version = config.firmware_version
     if request.method == "POST":
         try:
@@ -277,22 +437,46 @@ def create_app(
     registry: SessionRegistry | None = None,
     hello_timeout: float = HELLO_TIMEOUT_S,
     clock=time.monotonic,
+    stt=None,
+    brain=None,
+    tts=None,
 ) -> web.Application:
     app = web.Application()
-    app["config"] = config
-    app["clock"] = clock
-    app["started_at"] = clock()
-    app["hello_timeout"] = hello_timeout
-    app["connections"] = {}
+    app[CONFIG] = config
+    app[CLOCK] = clock
+    app[STARTED_AT] = clock()
+    app[HELLO_TIMEOUT] = hello_timeout
+    app[CONNECTIONS] = {}
+
+    # One client per process: whisper and the brain keep HTTP connections warm.
+    app[STT] = stt or SttClient(config.stt_url, timeout_s=config.stt_timeout_s)
+    app[BRAIN] = brain or BrainClient(
+        config.hermes_base_url,
+        api_key=config.hermes_api_key,
+        model=config.hermes_model,
+        timeout_s=config.hermes_timeout_s,
+    )
+    app[TTS] = TtsEngine(
+        tts if tts is not None else EdgeTts(config.voice, timeout_s=config.tts_timeout_s)
+    )
+
+    async def _close_clients(_app: web.Application) -> None:
+        for key in (STT, BRAIN):
+            client = _app.get(key)
+            close = getattr(client, "close", None)
+            if close is not None:
+                await close()
+
+    app.on_cleanup.append(_close_clients)
 
     def close_replaced(old: DeviceSession) -> None:
-        connection = app["connections"].pop(old.session_id, None)
+        connection = app[CONNECTIONS].pop(old.session_id, None)
         if connection is not None and not connection.closed:
             asyncio.ensure_future(connection.close(code=1000, message=b"replaced"))
 
     if registry is None:
         registry = SessionRegistry(idle_s=config.session_idle_s, on_replace=close_replaced)
-    app["registry"] = registry
+    app[REGISTRY] = registry
 
     app.router.add_get("/healthz", healthz)
     app.router.add_get(config.ota_path, ota_stub)

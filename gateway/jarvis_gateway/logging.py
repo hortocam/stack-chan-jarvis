@@ -22,7 +22,7 @@ _STANDARD_ATTRS = frozenset(
 ) | {"message", "asctime", "taskName"}
 
 # Extra fields that carry what the user said or heard.
-_PRIVATE_ATTRS = frozenset({"transcript"})
+_PRIVATE_ATTRS = frozenset({"transcript", "reply"})
 
 
 class JsonLinesFormatter(logging.Formatter):
@@ -58,16 +58,24 @@ class TurnTimer:
     `time.monotonic` is injected so tests can drive it; the service uses the
     default. Deltas are measured from the previous stage, which is what the
     latency budget in the plan is expressed in.
+
+    ``offset_ms`` shifts every mark: a turn's clock starts when the utterance
+    ended, but the turn object is created a moment later, and the VAD close is
+    itself a stage (``vad_end_ms``). The offset keeps the marks cumulative from
+    the last voiced frame, which is the instant the budget is measured from.
     """
 
-    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self, clock: Callable[[], float] = time.monotonic, *, offset_ms: float = 0.0
+    ) -> None:
         self._clock = clock
         self._start = clock()
+        self._offset_ms = offset_ms
         self._stages: dict[str, float] = {}
 
     def mark(self, stage: str) -> float:
         """Record `stage` now and return its milliseconds since the turn started."""
-        elapsed = (self._clock() - self._start) * 1000.0
+        elapsed = self._offset_ms + (self._clock() - self._start) * 1000.0
         self._stages[stage] = elapsed
         return elapsed
 
