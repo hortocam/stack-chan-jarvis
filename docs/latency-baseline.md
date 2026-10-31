@@ -316,6 +316,21 @@ the ~2 s figure in the card is a target, not a measurement. This belongs in a
 follow-up card with the `jarvis-device` profile, before any product decision to
 give the robot a separate brain scope.
 
+**Re-measured 2026-10-31 14:44–15:20 (P3.2, `docs/brain-latency-options.md`).** The
+default channel was re-run for a same-session comparison: **8.41 s TTFT p50 / 20.16 s
+p90** over 20 turns (load 1.1–1.7), answer-audible 9.52 s p50 / 21.00 s p90,
+`prompt_tokens` 16,707 static. The decomposition above is now measured rather than
+assumed: the 16.7 k prompt's prefill costs **~0.65 s** (first reasoning delta at
+636–664 ms on every probe), and a turn that needs a tool (the bench utterance asks about
+the weather; the answer contains live conditions) spends 4–6 s before the first content
+token with 53.7 k–79.5 k prompt tokens, because the api_server platform has 18 toolsets
+/ 57 tools including web search. Every other flash-tier model on ollama.com measured
+**slower** to first token than `deepseek-v4.1-flash` (1.3–2.6 s against 0.6–0.7 s). The
+lean arm is still **not measured** — the profile is an owner decision, still open on
+t_12360673 (options A/B/C). The recommendation in `docs/brain-latency-options.md` is to
+keep the default channel until that decision is made, because the prompt is not where
+the 8 s lives.
+
 ### Not done here
 
 - No change to CT 912, the Hermes install, or any service outside the gateway.
