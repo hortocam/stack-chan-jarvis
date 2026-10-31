@@ -29,6 +29,7 @@ from typing import Any
 from aiohttp import WSMsgType, web
 
 from . import __version__
+from .ack import AckVoice
 from .audio import UPLINK_RATE, AudioError, OpusDecoder
 from .brain import BrainClient
 from .config import Config
@@ -72,6 +73,7 @@ REGISTRY = web.AppKey("registry", SessionRegistry)
 STT = web.AppKey("stt", Any)
 BRAIN = web.AppKey("brain", Any)
 TTS = web.AppKey("tts", Any)
+ACK = web.AppKey("ack", AckVoice)
 
 HELLO_TIMEOUT_S = 10.0
 MAX_MESSAGE_BYTES = 64 * 1024
@@ -200,6 +202,7 @@ async def _dispatch(
             tts=app[TTS],
             send_json=send_json,
             send_bytes=send_bytes,
+            ack=app[ACK],
         )
         try:
             await runner.run(utterance, vad_end_ms=vad_end_ms)
@@ -459,6 +462,19 @@ def create_app(
     app[TTS] = TtsEngine(
         tts if tts is not None else EdgeTts(config.voice, timeout_s=config.tts_timeout_s)
     )
+    app[ACK] = AckVoice(
+        config.ack_text, voice=config.voice, cache_dir=config.ack_cache_dir
+    )
+
+    async def _warm_ack(_app: web.Application) -> None:
+        """Synthesise the one-off phrase before the first turn needs it."""
+
+        try:
+            await _app[ACK].frames(_app[TTS])
+        except Exception:  # an unavailable phrase must never stop the gateway
+            logger.exception("acknowledgement warm-up failed")
+
+    app.on_startup.append(_warm_ack)
 
     async def _close_clients(_app: web.Application) -> None:
         for key in (STT, BRAIN):

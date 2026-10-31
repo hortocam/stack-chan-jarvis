@@ -48,6 +48,11 @@ def test_defaults_match_the_configuration_reference() -> None:
     assert cfg.control_socket == "/run/jarvis-gateway/control.sock"
     assert cfg.log_transcripts is False
     assert cfg.apology_text == "Sorry, I didn't catch that."
+    # P3.1 latency: acknowledgement phrase, its delay, cache and first-chunk cap.
+    assert cfg.ack_text == "Right."
+    assert cfg.ack_delay_ms == 300
+    assert cfg.ack_cache_dir.endswith("/.cache")
+    assert cfg.first_chunk_words == 12
 
 
 def test_every_key_can_be_overridden() -> None:
@@ -73,6 +78,10 @@ def test_every_key_can_be_overridden() -> None:
         "JG_CONTROL_SOCKET": "/tmp/control.sock",
         "JG_LOG_TRANSCRIPTS": "true",
         "JG_APOLOGY_TEXT": "Say again?",
+        "JG_ACK_TEXT": "Certainly.",
+        "JG_ACK_DELAY_MS": "120",
+        "JG_ACK_CACHE_DIR": "/tmp/jarvis-cache",
+        "JG_FIRST_CHUNK_WORDS": "9",
     }
 
     cfg = load_config(env)
@@ -97,6 +106,10 @@ def test_every_key_can_be_overridden() -> None:
     assert cfg.control_socket == "/tmp/control.sock"
     assert cfg.log_transcripts is True
     assert cfg.apology_text == "Say again?"
+    assert cfg.ack_text == "Certainly."
+    assert cfg.ack_delay_ms == 120
+    assert cfg.ack_cache_dir == "/tmp/jarvis-cache"
+    assert cfg.first_chunk_words == 9
 
 
 def test_config_is_frozen() -> None:
@@ -155,6 +168,9 @@ def test_bad_url_raises(key: str, value: str) -> None:
         ("JG_WS_PATH", "xiaozhi/v1/"),
         ("JG_OTA_PATH", ""),
         ("JG_LOG_TRANSCRIPTS", "maybe"),
+        ("JG_ACK_DELAY_MS", "-1"),
+        ("JG_FIRST_CHUNK_WORDS", "-1"),
+        ("JG_ACK_CACHE_DIR", "relative/cache"),
     ],
 )
 def test_invalid_values_raise(key: str, value: str) -> None:

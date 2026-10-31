@@ -47,6 +47,8 @@ SendBytes = Callable[[bytes], Awaitable[None]]
 @dataclass(slots=True)
 class _Speech:
     started: bool = False
+    ack_only: bool = False
+    answered: bool = False
     frames: int = 0
     sentences: int = 0
     failures: int = 0
@@ -81,6 +83,7 @@ class TurnRunner:
         send_bytes: SendBytes,
         clock: Callable[[], float] | None = None,
         cancel: asyncio.Event | None = None,
+        ack=None,
     ) -> None:
         self._config = config
         self._session_id = session_id
@@ -92,7 +95,8 @@ class TurnRunner:
         self._send_bytes = send_bytes
         self._cancel = cancel
         self._clock = clock
-        self._chunker = SentenceChunker()
+        self._ack = ack
+        self._chunker = SentenceChunker(first_chunk_words=config.first_chunk_words)
 
     # -- public ----------------------------------------------------------
 
@@ -133,8 +137,9 @@ class TurnRunner:
                 await self._close_speech(speech, timer)
             return self._result(transcript, reply, speech, timer, "cancelled")
 
-        if speech.frames == 0:
-            # Nothing was heard: apologise (FR-018), whatever the cause.
+        if not speech.answered:
+            # Nothing was heard that answered the question: apologise (FR-018),
+            # whatever the cause. An acknowledgement alone is not an answer.
             reason = brain_error.kind if brain_error is not None else "no_speech"
             if speech.failures and brain_error is None:
                 reason = "tts_failed"
@@ -197,9 +202,21 @@ class TurnRunner:
         reply = ""
         error: BrainError | None = None
         cancelled = False
+        ack_played = False
         try:
             while True:
-                sentence = await sentences.get()
+                if not ack_played and self._ack is not None and not speech.started:
+                    try:
+                        sentence = await asyncio.wait_for(
+                            sentences.get(), timeout=self._config.ack_delay_ms / 1000.0
+                        )
+                    except TimeoutError:
+                        # The brain is still thinking: say something short now.
+                        ack_played = True
+                        await self._speak_ack(speech, timer)
+                        continue
+                else:
+                    sentence = await sentences.get()
                 if sentence is None:
                     break
                 await self._speak_sentence(sentence, speech, timer)
@@ -215,6 +232,31 @@ class TurnRunner:
                 producer.cancel()
                 await asyncio.gather(producer, return_exceptions=True)
         return reply, error, cancelled
+
+    async def _speak_ack(self, speech: _Speech, timer: TurnTimer) -> bool:
+        """Speak the cached acknowledgement as this turn's first sentence."""
+
+        if self._ack is None:
+            return False
+        frames = await self._ack.frames(self._tts)
+        if not frames:
+            return False
+        text = self._ack.text
+        speech.emotion = choose_emotion(text)
+        await self._send_json(llm_message(self._session_id, speech.emotion, text))
+        await self._send_json(tts_start(self._session_id))
+        speech.started = True
+        speech.ack_only = True
+        await self._send_json(tts_sentence_start(self._session_id, text))
+        speech.sentences += 1
+        for frame in frames:
+            if self._cancel is not None and self._cancel.is_set():
+                break
+            if speech.frames == 0:
+                timer.mark("first_audio_ms")
+            await self._send_bytes(frame)
+            speech.frames += 1
+        return True
 
     async def _speak_sentence(self, sentence: str, speech: _Speech, timer: TurnTimer) -> bool:
         """Synthesize first, announce only if it worked, then stream the frames."""
@@ -237,6 +279,12 @@ class TurnRunner:
             await self._send_json(llm_message(self._session_id, speech.emotion, sentence))
             await self._send_json(tts_start(self._session_id))
             speech.started = True
+        elif speech.ack_only:
+            # The acknowledgement already reached the device; the answer's own
+            # text and emotion must follow it, before the first answer frame.
+            speech.emotion = choose_emotion(sentence)
+            await self._send_json(llm_message(self._session_id, speech.emotion, sentence))
+            speech.ack_only = False
         await self._send_json(tts_sentence_start(self._session_id, sentence))
 
         try:
@@ -250,6 +298,7 @@ class TurnRunner:
         finally:
             await stream.aclose()
         speech.sentences += 1
+        speech.answered = True
         return True
 
     async def _speak_apology(self, speech: _Speech, timer: TurnTimer) -> bool:

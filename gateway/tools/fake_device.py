@@ -371,6 +371,7 @@ def check_loop_sequence(
     index += 1
 
     sentences = 0
+    llms = 1  # the llm before tts start already counted
     while index < len(messages):
         message = messages[index]
         if message.get("type") == "tts" and message.get("state") == "sentence_start":
@@ -379,9 +380,19 @@ def check_loop_sequence(
             sentences += 1
             index += 1
             continue
+        if message.get("type") == "llm":
+            # An acknowledgement may precede the answer; each llm still has to
+            # carry an emotion from the firmware's accepted set.
+            if message.get("emotion") not in ACCEPTED_EMOTIONS:
+                raise SequenceMismatch(f"llm emotion {message.get('emotion')!r} is not accepted")
+            llms += 1
+            index += 1
+            continue
         break
     if sentences == 0:
         raise SequenceMismatch("no tts sentence_start before the audio")
+    if llms == 0:
+        raise SequenceMismatch("no llm before the audio")
     if index >= len(messages):
         raise SequenceMismatch("missing tts stop")
     stop = messages[index]

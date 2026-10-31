@@ -133,3 +133,183 @@ this file records the number so that conversation starts from evidence.
 `hello → stt → llm → tts start → sentence_start → frames → tts stop`, no
 unhandled error, in **3.3 s** total (wall clock, `pytest -m slow`). The audio is
 sent unpaced in that test, so the number measures the pipeline, not real time.
+
+## P3.1 — first audible word under 3 s (implementation and 20-turn A/B)
+
+**Measured**: 2026-10-31 13:55–14:32 EDT on CT 914 (`172.16.90.14`), no robot
+attached, load average 1.3–2.1 on 8 cores. Real whisper on CT 912, real Hermes
+API server on loopback (:8642), real `en-GB-RyanNeural` edge-tts. The number in
+the card (12.32 s at `d0de930`) is from the same host; this section records the
+20-turn before/after the card asks for.
+
+### What changed
+
+Two changes, independently configurable so each can be measured alone:
+
+1. **Instant acknowledgement** (`gateway/jarvis_gateway/ack.py`, `turn.py`).
+   If the brain has produced no speakable sentence `JG_ACK_DELAY_MS` (default
+   300 ms) after the transcript, the gateway speaks one short phrase
+   (`JG_ACK_TEXT`, default `Right.`) and then the answer. The phrase is
+   synthesised once with the configured voice, decoded and Opus-framed, kept in
+   memory, and cached in `JG_ACK_CACHE_DIR` (default `gateway/.cache/`) under a
+   digest of voice + text, so later boots pay no synthesis and no decode. A
+   corrupt cache is discarded and rebuilt.
+2. **First-chunk cap** (`chunker.py`). The first chunk of a turn is emitted at
+   the earlier of a clause boundary (`,` `;` `:` `—` or ` - `) once at least four
+   words are buffered, or `JG_FIRST_CHUNK_WORDS` words (default 12). Every later
+   chunk keeps the sentence rules. `0` disables the cap and restores the old
+   behaviour exactly.
+
+Wire shape in an acknowledged turn:
+
+```text
+stt → llm(neutral, "Right.") → tts start → sentence_start("Right.") → ack frames
+    → llm(<emotion>, first answer chunk) → sentence_start(<chunk>) → answer frames
+    → tts stop
+```
+
+Two decisions are worth recording because the vendor sources are not in this
+repository to check against:
+
+- **The acknowledgement is spoken after STT, not at utterance close.** FR-006
+  makes an empty transcript end the turn with no further messages, and the
+  silence/noise contract tests assert exactly that. Speaking before the
+  transcript would say "Right." to a door slam and break that rule, so the
+  gateway waits for a non-empty transcript. The cost is the whisper time
+  (~1.25 s in the table below); the gain is not talking to noise.
+- **A second `llm` message carries the answer.** The plan lists `llm` in the
+  server→device set without a once-per-turn rule, and the display text has to
+  change from "Right." to the answer anyway; the answer's `llm` also carries the
+  emotion chosen from its first chunk. `tools/fake_device.py::check_loop_sequence`
+  now accepts `llm` between `tts start` and `tts stop` and still refuses unknown
+  messages there.
+
+`first_audio_ms` in the turn record now marks the **acknowledgement** when one is
+played (that is the first audible word, which is what SC-001 measures). In such
+a turn `first_audio_ms < ttft_ms`, and `first_audio_ms − ttft_ms` is no longer
+the synthesis latency of the answer. The bench below measures the answer's own
+first frame from the device side.
+
+### Method
+
+`gateway/tools/latency_bench.py` starts the gateway in-process on an ephemeral
+port against the live services, drives one synthetic device on one session for
+20 turns (default WAV `tests/fixtures/audio/utterance_speech.wav`), and records
+per turn: `listen stop` → first binary frame, the first frame of the answer, and
+the gateway's own `turn` record (STT, TTFT, stage deltas). Each configuration
+used a fresh `--device-id`, so every run started a fresh Hermes conversation
+scope and the 20-turn context growth is the same in all four runs.
+
+```bash
+cd gateway
+set -a; . /etc/jarvis-gateway/env; set +a     # or the host env file with API_SERVER_KEY
+# D: both changes (the shipped default)
+.venv/bin/python -m tools.latency_bench --turns 20 --device-id bench-d --out /tmp/p31-d.jsonl
+# A: baseline (main, no ack, no cap) — run with the main checkout's code on PYTHONPATH
+JG_ACK_TEXT= .venv/bin/python -m tools.latency_bench --turns 20 --device-id bench-a --out /tmp/p31-a.jsonl
+# single-change runs: JG_ACK_TEXT= (cap only), JG_FIRST_CHUNK_WORDS=0 (ack only)
+```
+
+Percentiles are linear interpolation over the 20 answered turns; failed turns
+(apology) are excluded from the latency distribution and counted separately —
+there were none in any of the four runs. TTFT p90 is the largest source of
+run-to-run noise (the same code moved p50 by ~2 s between runs); the
+`token → answer` column isolates the chunker from that noise.
+
+### Before/after, 20 turns each
+
+| Change | First audible p50 | First audible p90 | Whisper p50 | Hermes TTFT p50 | First token → answer p50 |
+|---|---|---|---|---|---|
+| A. baseline (`d0d3c97`, no ack, no cap) | 12.36 s | 18.72 s | 1.24 s | 8.31 s | 3.17 s |
+| B. cap only (`ACK_TEXT=""`, 12 words) | 11.22 s | 23.09 s | 1.25 s | 9.75 s | 1.18 s |
+| C. acknowledgement only (`FIRST_CHUNK_WORDS=0`) | **1.55 s** | **1.65 s** | 1.25 s | 9.78 s | 1.99 s |
+| D. both (shipped default) | **1.55 s** | **1.64 s** | 1.25 s | 7.11 s | 1.00 s |
+
+("First audible" is on the gateway clock, i.e. from the last voiced frame —
+the same origin as the card's 12.32 s. From `listen stop` instead of the VAD
+tail, D is 1.25 s p50 / 1.34 s p90.)
+
+**SC-001: PASS.** D is 1.55 s p50 / 1.64 s p90 against a 3.0 s / 4.0 s budget.
+The acknowledgement, not the answer, is what makes the robot audible in time:
+even the fastest 20-turn baseline run was 12.4 s p50, and no chunker change can
+move the answer ahead of Hermes' 5–27 s TTFT on this host.
+
+**Acknowledgement latency: 1.55 s from the last voiced frame, not the 400 ms
+sub-target.** The budget is 1.25 s whisper + the 300 ms quiet window + ~50 ms
+to send the first cached frame. On the gateway clock the ack itself lands
+301 ms after the transcript (p50 and p90) and is independent of the brain. A
+400 ms utterance-close target would require speaking before transcription,
+which FR-006 and the silence/noise tests forbid. If the product wants that,
+it is a spec change (acknowledge on VAD close, cancel it if whisper returns
+nothing) and needs its own card.
+
+**First-chunk cap: 1.0–1.2 s from first token, not the 800 ms sub-target.** The
+cap cuts the wait from 3.17 s p50 / 4.33 s p90 to 1.00–1.18 s p50 / 1.72 s p90
+(and the long-tail max from 8.1 s to 2.6 s). What remains is the brain's own
+token rate for 10–12 words plus edge-tts first audio (~200–400 ms). Ten words
+instead of twelve would buy perhaps 150 ms at a prosody cost; going below ~800 ms
+reliably needs either a smaller first chunk (6–8 words) or a pre-opened edge-tts
+connection. Neither is in this card's "10–12 words or a clause boundary".
+
+### Item 3 — whisper (measured, not changed)
+
+Twenty standalone transcriptions of the same `utterance_speech.wav` through
+`SttClient`, warm connection, no gateway:
+
+| n | p50 | p90 | min | max | transcripts identical |
+|---|---|---|---|---|---|
+| 20 | **976 ms** | 1079 ms | 898 ms | 1229 ms | yes |
+
+In-turn `stt_ms` was 1.24–1.25 s p50 across all four runs (the delta is the
+gateway's WAV build/upload and contention with the rest of the turn). Both are
+2–5× the plan's 200–500 ms. Measured options, in order of likely gain and
+risk, for a card of its own on CT 912 (this card does not touch it):
+
+1. `faster-whisper` / CTranslate2 `int8` with the same model size — typically
+   2–4× faster on CPU; the request/response contract is unchanged, so the
+   gateway needs no change.
+2. A smaller model (`small`/`base` en) — largest win, some accuracy risk; the
+   fixture utterances transcribe exactly today, so it is measurable.
+3. Upload while the user is still speaking — saves the ~50–100 ms WAV/HTTP
+   upload, not the model time; not worth it before 1 or 2.
+
+### Item 4 — brain TTFT (default channel measured; lean profile proposed)
+
+The default device channel measured 7.1–9.8 s TTFT p50 (12.3–22.2 s p90) across
+the four 20-turn runs, with a ~16.7 k-token prompt (T011). That is the number
+the acknowledgement hides but does not fix.
+
+A lean device channel was **not measured in this run**. It needs a second
+Hermes profile (short SOUL, no memory provider, disabled toolsets) with its own
+`API_SERVER_KEY`, addressed as `/p/<profile>/v1` on the loopback listener; that
+is a host-level change to the shared Hermes install, not a gateway change, and
+it should be an owner-approved action rather than something a worker spawns
+under an unrelated latency card. The recipe is:
+
+```bash
+hermes profile create jarvis-device --clone-from Jarvis --no-skills
+# then, in ~/.hermes/profiles/jarvis-device/: short SOUL.md, memory provider off,
+# toolsets reduced to none (the robot has body tools through MCP, not shell/file tools),
+# and a distinct API_SERVER_KEY in that profile's .env
+JG_HERMES_BASE_URL=http://127.0.0.1:8642/p/jarvis-device/v1 .venv/bin/python -m tools.latency_bench --turns 20 --device-id bench-lean
+```
+
+The honest trade, stated without pretending it was measured: the lean channel
+gives up shared long-term memory and the full tool surface (terminal, files,
+web, skills) for the robot's turns; what it buys is a system prompt of a few
+hundred tokens instead of ~16.7 k, and therefore some part of the 7–10 s TTFT.
+How much is the provider's queueing/scheduling versus prefill is unknown today;
+the ~2 s figure in the card is a target, not a measurement. This belongs in a
+follow-up card with the `jarvis-device` profile, before any product decision to
+give the robot a separate brain scope.
+
+### Not done here
+
+- No change to CT 912, the Hermes install, or any service outside the gateway.
+- No lean Hermes profile was created (see item 4).
+- Abort/barge-in (T037) is still unimplemented; the acknowledgement shares the
+  turn's cancel hook but T037 owns the wire behaviour.
+- The 20-turn runs are same-host but not same-minute; the provider's TTFT moved
+  by ~2 s p50 between runs. The acknowledgement numbers are tightly clustered
+  (1.19–1.71 s over 80 turns), so the SC-001 verdict does not depend on that
+  variance; the TTFT columns should be read as "on this host, under this load".

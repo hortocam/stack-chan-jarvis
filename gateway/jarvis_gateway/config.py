@@ -14,9 +14,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlparse
 
 __all__ = ["Config", "ConfigError", "load_config"]
+
+#: Where the one-off acknowledgement phrase is cached (overridable).
+DEFAULT_ACK_CACHE_DIR = str(Path(__file__).resolve().parents[1] / ".cache")
 
 
 class ConfigError(ValueError):
@@ -49,6 +53,10 @@ class Config:
     control_socket: str
     log_transcripts: bool
     apology_text: str
+    ack_text: str
+    ack_delay_ms: int
+    ack_cache_dir: str
+    first_chunk_words: int
 
 
 _DEFAULTS: dict[str, str] = {
@@ -74,6 +82,10 @@ _DEFAULTS: dict[str, str] = {
     "JG_CONTROL_SOCKET": "/run/jarvis-gateway/control.sock",
     "JG_LOG_TRANSCRIPTS": "false",
     "JG_APOLOGY_TEXT": "Sorry, I didn't catch that.",
+    "JG_ACK_TEXT": "Right.",
+    "JG_ACK_DELAY_MS": "300",
+    "JG_ACK_CACHE_DIR": DEFAULT_ACK_CACHE_DIR,
+    "JG_FIRST_CHUNK_WORDS": "12",
 }
 
 _TRUE = {"1", "true", "yes", "on"}
@@ -154,6 +166,16 @@ def load_config(env: Mapping[str, str]) -> Config:
             f"JG_VAD_MIN_SPEECH_MS must not be negative, got {vad_min_speech_ms}"
         )
 
+    ack_delay_ms = _int("JG_ACK_DELAY_MS", get("JG_ACK_DELAY_MS"))
+    if ack_delay_ms < 0:
+        raise ConfigError(f"JG_ACK_DELAY_MS must not be negative, got {ack_delay_ms}")
+
+    first_chunk_words = _int("JG_FIRST_CHUNK_WORDS", get("JG_FIRST_CHUNK_WORDS"))
+    if first_chunk_words < 0:
+        raise ConfigError(
+            f"JG_FIRST_CHUNK_WORDS must not be negative, got {first_chunk_words}"
+        )
+
     return Config(
         bind_host=_required("JG_BIND_HOST", get("JG_BIND_HOST")),
         bind_port=bind_port,
@@ -187,4 +209,8 @@ def load_config(env: Mapping[str, str]) -> Config:
         control_socket=_path("JG_CONTROL_SOCKET", get("JG_CONTROL_SOCKET")),
         log_transcripts=_bool("JG_LOG_TRANSCRIPTS", get("JG_LOG_TRANSCRIPTS")),
         apology_text=get("JG_APOLOGY_TEXT"),
+        ack_text=get("JG_ACK_TEXT").strip(),
+        ack_delay_ms=ack_delay_ms,
+        ack_cache_dir=_path("JG_ACK_CACHE_DIR", get("JG_ACK_CACHE_DIR")),
+        first_chunk_words=first_chunk_words,
     )
