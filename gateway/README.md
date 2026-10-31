@@ -53,8 +53,9 @@ one packet per binary frame, and can assert the whole turn sequence:
 `--expect-loop` asserts `stt → llm (firmware emotion) → tts start →
 sentence_start → binary frames → exactly one tts stop`, one session id
 throughout, and silence after the stop. Exit codes: 0 asserted sequence,
-1 contract violation, 2 usage error. `--ota` fetches the manifest at `--url`
-(placeholder until T034).
+1 contract violation, 2 usage error. The default `--timeout` for `tts stop` is
+60 s (the brain's time-to-first-token varies; see `../docs/latency-baseline.md`).
+`--ota` fetches the manifest at `--url` (placeholder until T034).
 
 ## Layout
 

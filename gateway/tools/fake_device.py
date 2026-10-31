@@ -431,7 +431,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device-id", default=DEFAULT_DEVICE_ID, help="fake MAC address")
     parser.add_argument("--client-id", default=None, help="client UUID (random if omitted)")
     parser.add_argument("--frames", type=int, default=None, help="stop after N frames")
-    parser.add_argument("--timeout", type=float, default=30.0, help="seconds to wait for tts stop")
+    parser.add_argument(
+        "--timeout", type=float, default=60.0, help="seconds to wait for tts stop"
+    )
     parser.add_argument("--out-dir", default=None, help="write received audio frames here")
     parser.add_argument("--expect-loop", action="store_true", help="assert the full turn sequence")
     parser.add_argument("--no-pace", action="store_true", help="send frames back to back")

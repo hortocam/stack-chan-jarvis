@@ -93,6 +93,14 @@ re-transcribed by whisper:
 i.e. the bytes on the wire are the answer, at 24 kHz Opus, one 60 ms packet per
 frame.
 
+A second identical run did **not** finish inside the device's 30 s wait: two
+`tts sentence_start` frames had arrived and the turn was still streaming when
+the synthetic device gave up, so Hermes TTFT had grown well past the 6.5 s
+above (the brain had just answered several probe turns). The gateway stayed
+inside its own 90 s cap and cancelled the turn cleanly when the socket closed;
+`tools/fake_device.py` now waits 60 s by default. Expect TTFT variance until
+T057 measures the 20-turn distribution.
+
 ### Against the budget
 
 | Stage | Plan target | Measured (these turns) | Verdict |

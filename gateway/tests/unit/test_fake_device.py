@@ -40,7 +40,7 @@ def test_defaults_are_the_protocol_defaults() -> None:
     assert args.device_id == "24:0a:c4:00:11:22"
     assert args.client_id is None
     assert args.expect_loop is False
-    assert args.timeout == 30.0
+    assert args.timeout == 60.0
     assert args.out_dir is None
 
 
