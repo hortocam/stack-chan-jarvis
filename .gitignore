@@ -1,0 +1,19 @@
+# Python
+.venv/
+.venv-*/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local scratch / research checkouts (never part of the gateway)
+.research_stackchan/
+firmware/
+*.bin
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
