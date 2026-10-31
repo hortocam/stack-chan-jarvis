@@ -1,0 +1,9 @@
+data: {"id": "chatcmpl-0834cd0500524e53b67ffa6229a8e", "object": "chat.completion.chunk", "created": 1793466915, "model": "hermes-agent", "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-0834cd0500524e53b67ffa6229a8e", "object": "chat.completion.chunk", "created": 1793466915, "model": "hermes-agent", "choices": [{"index": 0, "delta": {"content": "st"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-0834cd0500524e53b67ffa6229a8e", "object": "chat.completion.chunk", "created": 1793466915, "model": "hermes-agent", "choices": [{"index": 0, "delta": {"content": "ored"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-0834cd0500524e53b67ffa6229a8e", "object": "chat.completion.chunk", "created": 1793466915, "model": "hermes-agent", "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 16707, "completion_tokens": 4, "total_tokens": 16711}}
+
+data: [DONE]

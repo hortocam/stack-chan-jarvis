@@ -28,6 +28,7 @@ Paths are relative to the vendor checkout named in each row.
 | `mcp_tools_call_request.json` | gateway → device | `xiaozhi-esp32/docs/mcp-protocol.md` §4 |
 | `mcp_tools_call_result.json` | device → gateway | `xiaozhi-esp32/main/mcp_server.h:271-303` (`McpTool::Call`) + `StackChan/firmware/main/hal/hal_mcp.cpp:37` (returned text) |
 | `ota_response.json` | gateway → device | plan C1 (`specs/001-jarvis-gateway/plan.md:181-202`) + `xiaozhi-esp32/main/ota.cc:112-240`; `timestamp` is epoch **milliseconds** and `timezone_offset` is minutes east of UTC (plan D15). `websocket.token` is a placeholder — the real value is `JG_DEVICE_TOKEN` |
+| `sse_chunk.txt` | Hermes → gateway | captured live from `POST http://127.0.0.1:8642/v1/chat/completions` on 2026-10-31 (T011, `docs/hermes-api-notes.md`). Role chunk, two content chunks, finish chunk with `usage`, `[DONE]`; ids and timestamps are the real ones from that response and carry no user content |
 
 Deliberately absent, and therefore absent from every fixture: `activation` and `mqtt` in the OTA
 manifest (plan C1 — no cloud account, no MQTT), and any `system`/`custom` message type (out of scope
