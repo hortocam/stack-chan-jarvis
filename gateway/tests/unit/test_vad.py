@@ -117,8 +117,7 @@ def test_stream_end_closes_an_utterance_with_the_stop_reason() -> None:
 
 def test_long_utterance_is_forced_at_the_cap() -> None:
     vad = Vad(max_utterance_s=30.0)
-    speech = read_frames("long_35s.wav")[:40]  # the fixture's first 2.4 s of speech
-    continuous = speech * 13  # 31.2 s without a pause between copies
+    continuous = [tone_frame(8000)] * 40 * 13  # 31.2 s of continuous speech
 
     results = feed(vad, continuous)
 
@@ -131,12 +130,13 @@ def test_long_utterance_is_forced_at_the_cap() -> None:
 
 
 def test_silence_window_comes_from_config() -> None:
-    frames = read_frames("long_35s.wav")
+    speech = [tone_frame(8000)] * 40  # 2.4 s, then a pause
+    frames = speech + silence_frames(4)
     default = Vad()
     short = Vad(silence_ms=120)
 
-    default_results = feed(default, frames[:44])
-    short_results = feed(short, frames[:44])
+    default_results = feed(default, frames)
+    short_results = feed(short, frames)
 
     assert default_results == []
     assert len(short_results) == 1
@@ -191,7 +191,7 @@ def test_a_frame_below_the_start_threshold_never_opens_an_utterance() -> None:
 def test_utterance_pcm_is_capped_by_the_maximum() -> None:
     vad = Vad(max_utterance_s=1.0)
 
-    results = feed(vad, read_frames("long_35s.wav")[:30])
+    results = feed(vad, [tone_frame(8000)] * 30)
 
     assert len(results) == 1
     assert results[0].end_frame == 17  # the 17th 60 ms frame crosses 1.0 s
