@@ -11,7 +11,11 @@ __pycache__/
 # Local scratch / research checkouts (never part of the gateway)
 .research_stackchan/
 firmware/
+# Firmware binaries are never committed. The T003 Opus test fixtures are the one
+# exception: ten deterministic 180-byte packets (24 kbit/s x 60 ms), needed by
+# tests/unit/test_audio_fixtures.py and by the T009 codec round-trip.
 *.bin
+!gateway/tests/fixtures/audio/opus_16k_60ms/*.bin
 
 # Editors / OS
 .DS_Store
