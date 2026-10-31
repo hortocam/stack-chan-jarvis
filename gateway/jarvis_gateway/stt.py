@@ -85,7 +85,7 @@ class SttClient:
         form.add_field("response_format", "json")
 
         timeout = aiohttp.ClientTimeout(total=self.timeout_s)
-        session, owned = await self._get_session()
+        session = self._get_session()
         try:
             async with session.post(self.url, data=form, timeout=timeout) as response:
                 body = await response.read()
@@ -100,9 +100,6 @@ class SttClient:
             ) from exc
         except aiohttp.ClientError as exc:
             raise SttError(f"whisper is unreachable: {exc}", kind="network") from exc
-        finally:
-            if owned:
-                await session.close()
 
         return self._parse(body)
 
@@ -124,12 +121,20 @@ class SttClient:
             )
         return document["text"].strip()
 
-    async def _get_session(self) -> tuple[aiohttp.ClientSession, bool]:
-        if self._session is not None:
-            return self._session, False
-        return aiohttp.ClientSession(), True
+    def _get_session(self) -> aiohttp.ClientSession:
+        """One HTTP session for the process, so the connection stays warm."""
+
+        if self._session is None:
+            self._session = aiohttp.ClientSession()
+        return self._session
 
     async def close(self) -> None:
         if self._session is not None:
             await self._session.close()
             self._session = None
+
+    async def __aenter__(self) -> SttClient:
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self.close()

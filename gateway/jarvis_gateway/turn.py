@@ -240,7 +240,8 @@ class TurnRunner:
         await self._send_json(tts_sentence_start(self._session_id, sentence))
 
         try:
-            timer.mark("first_audio_ms") if speech.frames == 0 else None
+            if speech.frames == 0:
+                timer.mark("first_audio_ms")
             await self._send_bytes(first)
             speech.frames += 1
             async for frame in stream:

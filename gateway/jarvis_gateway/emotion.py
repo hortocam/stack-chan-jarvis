@@ -37,21 +37,23 @@ EMOTION_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("angry", ("angry", "furious", "annoyed", "irritated", "outraged", "how dare")),
     ("sad", ("sorry", "sad", "unfortunately", "afraid", "regret", "miss you")),
     ("sleepy", ("sleep", "sleepy", "tired", "bedtime", "good night", "exhausted")),
-    ("doubtful", ("not sure", "unsure", "maybe", "perhaps", "i doubt", "hmm", "?"))
-    ,
-    ("happy", (
+    ("doubtful", ("not sure", "unsure", "maybe", "perhaps", "i doubt", "hmm", "?")),
+    (
         "happy",
-        "glad",
-        "delighted",
-        "wonderful",
-        "great",
-        "lovely",
-        "perfect",
-        "congrat",
-        "excellent",
-        "yes!",
-        "pleasure",
-    )),
+        (
+            "happy",
+            "glad",
+            "delighted",
+            "wonderful",
+            "great",
+            "lovely",
+            "perfect",
+            "congrat",
+            "excellent",
+            "yes!",
+            "pleasure",
+        ),
+    ),
 )
 
 #: A tool that moved the body gets a cheerful face when the words are neutral.

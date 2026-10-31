@@ -114,7 +114,7 @@ class BrainClient:
             "Accept": "text/event-stream",
         }
         timeout = aiohttp.ClientTimeout(total=None)  # the turn owns the deadline
-        session, owned = self._get_session()
+        session = self._get_session()
         parts: list[str] = []
         try:
             async with session.post(
@@ -134,9 +134,6 @@ class BrainClient:
             raise BrainError(
                 f"brain stream failed: {exc}", kind="interrupted", partial="".join(parts)
             ) from exc
-        finally:
-            if owned:
-                await session.close()
 
         return BrainReply(text="".join(parts), saw_done=saw_done)
 
@@ -216,12 +213,20 @@ class BrainClient:
             on_delta(content)
         return False
 
-    def _get_session(self) -> tuple[aiohttp.ClientSession, bool]:
-        if self._session is not None:
-            return self._session, False
-        return aiohttp.ClientSession(), True
+    def _get_session(self) -> aiohttp.ClientSession:
+        """One HTTP session for the process, so the connection stays warm."""
+
+        if self._session is None:
+            self._session = aiohttp.ClientSession()
+        return self._session
 
     async def close(self) -> None:
         if self._session is not None:
             await self._session.close()
             self._session = None
+
+    async def __aenter__(self) -> BrainClient:
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self.close()

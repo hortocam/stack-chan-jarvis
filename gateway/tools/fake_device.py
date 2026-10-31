@@ -441,7 +441,11 @@ def build_parser() -> argparse.ArgumentParser:
 async def _run(args: argparse.Namespace) -> int:
     if args.ota:
         async with aiohttp.ClientSession() as session:
-            async with session.get(args.url, headers={"Device-Id": args.device_id}) as response:
+            async with session.get(
+                args.url,
+                headers={"Device-Id": args.device_id},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
                 document = await response.json()
         print(json.dumps(document, indent=2, ensure_ascii=False))
         return 0

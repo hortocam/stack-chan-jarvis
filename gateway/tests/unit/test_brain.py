@@ -35,9 +35,10 @@ async def test_streams_deltas_and_returns_the_joined_reply(fake_hermes) -> None:
     fake_hermes.tokens = ["Hello", " there", ", sir."]
     deltas: list[str] = []
 
-    reply = await client_for(fake_hermes).stream(
-        device_id="aa:bb:cc:dd:ee:ff", text="hello", on_delta=deltas.append
-    )
+    async with client_for(fake_hermes) as client:
+        reply = await client.stream(
+            device_id="aa:bb:cc:dd:ee:ff", text="hello", on_delta=deltas.append
+        )
 
     assert deltas == ["Hello", " there", ", sir."]
     assert reply.text == "Hello there, sir."
@@ -45,11 +46,11 @@ async def test_streams_deltas_and_returns_the_joined_reply(fake_hermes) -> None:
 
 
 async def test_sends_the_brain_contract_headers_and_a_streamed_body(fake_hermes) -> None:
-    client_for(fake_hermes)
     deltas: list[str] = []
-    await client_for(fake_hermes).stream(
-        device_id="aa:bb:cc:dd:ee:ff", text="what time is it", on_delta=deltas.append
-    )
+    async with client_for(fake_hermes) as client:
+        await client.stream(
+            device_id="aa:bb:cc:dd:ee:ff", text="what time is it", on_delta=deltas.append
+        )
 
     request = fake_hermes.requests[0]
     assert request["path"] == "/v1/chat/completions"
@@ -67,9 +68,8 @@ async def test_reasoning_deltas_are_never_sent_to_be_spoken(fake_hermes) -> None
     fake_hermes.tokens = ["It is", " mild today."]
     deltas: list[str] = []
 
-    reply = await client_for(fake_hermes).stream(
-        device_id="dev", text="weather?", on_delta=deltas.append
-    )
+    async with client_for(fake_hermes) as client:
+        reply = await client.stream(device_id="dev", text="weather?", on_delta=deltas.append)
 
     assert deltas == ["It is", " mild today."]
     assert reply.text == "It is mild today."
@@ -82,9 +82,8 @@ async def test_a_chunk_split_across_network_writes_is_reassembled(fake_hermes) -
     fake_hermes.tokens = ["One", " two", " three"]
     deltas: list[str] = []
 
-    reply = await client_for(fake_hermes).stream(
-        device_id="dev", text="count", on_delta=deltas.append
-    )
+    async with client_for(fake_hermes) as client:
+        reply = await client.stream(device_id="dev", text="count", on_delta=deltas.append)
 
     delta_text = "".join(deltas)
     assert delta_text == "One two three"
@@ -95,8 +94,9 @@ async def test_an_error_before_the_first_token_is_a_status_error(fake_hermes) ->
     fake_hermes.error_before_first = True
     deltas: list[str] = []
 
-    with pytest.raises(BrainError) as excinfo:
-        await client_for(fake_hermes).stream(device_id="dev", text="hi", on_delta=deltas.append)
+    async with client_for(fake_hermes) as client:
+        with pytest.raises(BrainError) as excinfo:
+            await client.stream(device_id="dev", text="hi", on_delta=deltas.append)
 
     assert excinfo.value.kind == "status"
     assert deltas == []
@@ -107,8 +107,9 @@ async def test_a_stream_cut_after_the_first_token_keeps_the_partial_text(fake_he
     fake_hermes.tokens = ["Half a sen", "tence that never arrives"]
     deltas: list[str] = []
 
-    with pytest.raises(BrainError) as excinfo:
-        await client_for(fake_hermes).stream(device_id="dev", text="hi", on_delta=deltas.append)
+    async with client_for(fake_hermes) as client:
+        with pytest.raises(BrainError) as excinfo:
+            await client.stream(device_id="dev", text="hi", on_delta=deltas.append)
 
     assert excinfo.value.kind == "interrupted"
     assert deltas == ["Half a sen"]
@@ -116,14 +117,13 @@ async def test_a_stream_cut_after_the_first_token_keeps_the_partial_text(fake_he
 
 
 async def test_a_stalled_stream_times_out_as_its_own_kind(fake_hermes) -> None:
-    fake_hermes.pacing_s = 0.5
-    fake_hermes.tokens = ["Hello", " ...never"]
+    fake_hermes.stall_after_last_s = 1.0
+    fake_hermes.tokens = ["Hello"]
     deltas: list[str] = []
 
-    with pytest.raises(BrainError) as excinfo:
-        await client_for(fake_hermes, timeout_s=0.2).stream(
-            device_id="dev", text="hi", on_delta=deltas.append
-        )
+    async with client_for(fake_hermes, timeout_s=0.2) as client:
+        with pytest.raises(BrainError) as excinfo:
+            await client.stream(device_id="dev", text="hi", on_delta=deltas.append)
 
     assert excinfo.value.kind == "timeout"
     assert excinfo.value.partial == "Hello"
@@ -141,10 +141,11 @@ async def test_cancellation_stops_the_stream_promptly_and_keeps_the_partial(fake
             cancel.set()
 
     started = asyncio.get_running_loop().time()
-    with pytest.raises(BrainCancelled) as excinfo:
-        await client_for(fake_hermes).stream(
-            device_id="dev", text="hi", on_delta=on_delta, cancel=cancel
-        )
+    async with client_for(fake_hermes) as client:
+        with pytest.raises(BrainCancelled) as excinfo:
+            await client.stream(
+                device_id="dev", text="hi", on_delta=on_delta, cancel=cancel
+            )
     elapsed = asyncio.get_running_loop().time() - started
 
     assert elapsed < 1.0
