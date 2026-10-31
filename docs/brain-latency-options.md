@@ -140,11 +140,11 @@ not on the bench's wire today (`BrainReply` drops the final chunk's `usage`,
 
 ## Not done here
 
-- No Hermes profile was created, cloned, kept or deleted as part of this card's result.
-  (An empty `jarvis-body` profile was created while setting up the intended variant 2 and
-  removed immediately when the coordinator's mid-run note arrived; the default profile,
-  its key and the live API server were never touched. `hermes profile list` shows no such
-  profile; `:8642` still answers with the same key and the same 16,707-token prompt.)
+- No Hermes profile exists as a result of this card. An empty `jarvis-body` profile was
+  created while setting up the intended variant 2 and removed immediately when the
+  coordinator's mid-run note arrived; the default profile, its key and the live API
+  server were never touched. `hermes profile list` shows no such profile; `:8642` still
+  answers with the same key and the same 16,707-token prompt.
 - No change to any config, any API key, `JG_HERMES_BASE_URL`, or any service outside the
   gateway. No gateway code change.
 - No lean-arm latency, no lean prompt-token count, no 20-turn run on a second profile.
