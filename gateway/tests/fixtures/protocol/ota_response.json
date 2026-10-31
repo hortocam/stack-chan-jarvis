@@ -1,0 +1,15 @@
+{
+  "firmware": {
+    "version": "1.0.0",
+    "url": ""
+  },
+  "websocket": {
+    "url": "ws://172.16.90.14:8010/xiaozhi/v1/",
+    "token": "REPLACE_WITH_JG_DEVICE_TOKEN",
+    "version": 1
+  },
+  "server_time": {
+    "timestamp": 1793407350000,
+    "timezone_offset": -240
+  }
+}

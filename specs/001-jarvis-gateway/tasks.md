@@ -31,12 +31,12 @@ at `gateway/systemd/`, project docs under `docs/`.
 
 **Purpose**: A runnable package, a pinned toolchain, and the fixtures every later test needs.
 
-- [ ] T001 Create the service skeleton in `gateway/`: `pyproject.toml` (requires-python `>=3.11`,
+- [X] T001 Create the service skeleton in `gateway/`: `pyproject.toml` (requires-python `>=3.11`,
   deps `aiohttp`, `av`, `edge-tts>=7.2`; dev deps `pytest`, `pytest-asyncio`, `ruff`; ruff/pytest
   config with `asyncio_mode = auto`), `jarvis_gateway/__init__.py` (version string),
   `jarvis_gateway/__main__.py` (placeholder that starts nothing yet), `gateway/.gitignore`
   (`.venv/`, `__pycache__/`, `.env`), `gateway/README.md` stub.
-- [ ] T002 [P] Vendor protocol fixtures in `gateway/tests/fixtures/protocol/` transcribed from
+- [X] T002 [P] Vendor protocol fixtures in `gateway/tests/fixtures/protocol/` transcribed from
   `.research_stackchan/xiaozhi-esp32` at tag `v2.2.4`: `hello_device.json`, `hello_server.json`,
   `listen_start.json`, `listen_stop.json`, `listen_detect.json`, `abort.json`, `stt.json`,
   `llm.json`, `tts_start.json`, `tts_sentence_start.json`, `tts_stop.json`,
@@ -44,22 +44,22 @@ at `gateway/systemd/`, project docs under `docs/`.
   `mcp_tools_call_request.json`, `mcp_tools_call_result.json`, plus `ota_response.json` matching
   plan C1. No field may be invented: copy shapes from `docs/websocket.md`, `docs/mcp-protocol.md`,
   `main/ota.cc` and `hal_mcp.cpp`.
-- [ ] T003 [P] Audio fixtures in `gateway/tests/fixtures/audio/`: `utterance_ok.wav` (≈1.5 s,
+- [X] T003 [P] Audio fixtures in `gateway/tests/fixtures/audio/`: `utterance_ok.wav` (≈1.5 s,
   16 kHz mono PCM16), `silence_2s.wav`, `noise_burst_100ms.wav`, `long_35s.wav` (generated, not
   committed if large), and `opus_16k_60ms/{001..010}.bin` (ten packets). Add
   `gateway/tests/fixtures/make_audio.py` that regenerates every file with the pinned codec and
   documents the exact command in its docstring.
-- [ ] T004 [P] `gateway/jarvis_gateway/config.py`: frozen `Config` dataclass, `load_config(env)`
+- [X] T004 [P] `gateway/jarvis_gateway/config.py`: frozen `Config` dataclass, `load_config(env)`
   parsing every `JG_*` key from plan "Configuration Reference", validation (token non-empty, URLs
   parse, positive timeouts, ports in range, `voice` non-empty), and `gateway/.env.example` holding
   all keys with non-secret defaults. Tests in `gateway/tests/unit/test_config.py`: defaults,
   overrides, missing token raises, empty token raises, bad URL raises, unknown keys ignored, and the
   example file parses against the loader.
-- [ ] T005 [P] `gateway/jarvis_gateway/logging.py`: JSON-lines formatter and a `TurnTimer` that
+- [X] T005 [P] `gateway/jarvis_gateway/logging.py`: JSON-lines formatter and a `TurnTimer` that
   records named stages with monotonic deltas, plus `gateway/tests/unit/test_logging.py` asserting one
   object per line, ISO timestamps, stage ordering, and that the transcript field is absent unless
   enabled.
-- [ ] T006 [P] Fake upstreams in `gateway/tests/fakes/`: `fake_whisper.py`
+- [X] T006 [P] Fake upstreams in `gateway/tests/fakes/`: `fake_whisper.py`
   (`POST /v1/audio/transcriptions` → configurable text, status, delay, empty-result modes),
   `fake_hermes.py` (`POST /v1/chat/completions`, SSE chunks with configurable token pacing, error
   before/after first token, and assertion that `X-Hermes-Session-Key` was sent),

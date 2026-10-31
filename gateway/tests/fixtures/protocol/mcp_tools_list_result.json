@@ -1,0 +1,20 @@
+{
+  "session_id": "0123456789abcdef0123456789abcdef",
+  "type": "mcp",
+  "payload": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "tools": [
+        {
+          "name": "self.robot.get_head_angles",
+          "description": "Returns current yaw/pitch in degrees. Neutral position is {yaw:0, pitch:0}.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      ]
+    }
+  }
+}
