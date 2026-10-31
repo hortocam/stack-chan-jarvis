@@ -62,7 +62,8 @@ same conversation.
 
 ### B. Real process, real whisper + Hermes + edge-tts (the CLI)
 
-`python -m jarvis_gateway` on `127.0.0.1:8010`, then:
+From a clean clone of the branch (`git clone … && make install`), `python -m
+jarvis_gateway` on `127.0.0.1:8010`, then:
 
 ```bash
 .venv/bin/python -m tools.fake_device --url ws://127.0.0.1:8010/xiaozhi/v1/ \
@@ -70,36 +71,39 @@ same conversation.
     --expect-loop --out-dir /tmp/turn-audio
 ```
 
-Output: `session 1d29d3dd… open` / `sent 42 uplink frames (2520 ms) in 2.56s` /
-`tts stop after 19.88s; 601 audio frames (36060 ms)` / `--expect-loop: sequence
+Output: `session d59c57a6… open` / `sent 42 uplink frames (2520 ms) in 2.56s` /
+`tts stop after 24.62s; 633 audio frames (37980 ms)` / `--expect-loop: sequence
 OK` / exit 0. The gateway's own log record for that turn:
 
 | stage | cumulative ms | delta ms |
 |---|---|---|
-| vad_end_ms | 300.5 | 300.5 (silence tail, not the device's stop) |
-| stt_ms | 1227.6 | 927.2 |
-| ttft_ms | 7795.7 | 6568.0 |
-| first_audio_ms | 10150.4 | 2354.7 |
-| tts_end_ms | 17326.2 | 7175.8 |
+| vad_end_ms | 300.6 | 300.6 (silence tail, not the device's stop) |
+| stt_ms | 1251.4 | 950.8 |
+| ttft_ms | 7606.3 | 6354.9 |
+| first_audio_ms | 12316.0 | 4709.7 |
+| tts_end_ms | 22057.1 | 9741.1 |
 
-5 sentences, 601 downlink packets (36.06 s of audio), emotion `neutral`. The
+4 sentences, 633 downlink packets (37.98 s of audio), emotion `neutral`. The
 captured downlink was decoded with the gateway's own Opus decoder and
 re-transcribed by whisper:
 
-> "Bright and brisk in Shirley, sunny, 51°F, but it feels more like 46°F with
-> that 10 miles per hour north-north-westernly biting through. … Today's high is
-> only 53°F with a low of 37°F overnight …"
+> "Clear and dry over Winchester, Massachusetts, 52 degrees Fahrenheit, though
+> the wind out of the northwest at 11 mph, gusting 17, makes it feel more like
+> 42. Humidities down at 24% … Higher 53, dropping to 38 tonight, sunset at
+> 1738 …"
 
 i.e. the bytes on the wire are the answer, at 24 kHz Opus, one 60 ms packet per
 frame.
 
-A second identical run did **not** finish inside the device's 30 s wait: two
-`tts sentence_start` frames had arrived and the turn was still streaming when
-the synthetic device gave up, so Hermes TTFT had grown well past the 6.5 s
-above (the brain had just answered several probe turns). The gateway stayed
-inside its own 90 s cap and cancelled the turn cleanly when the socket closed;
-`tools/fake_device.py` now waits 60 s by default. Expect TTFT variance until
-T057 measures the 20-turn distribution.
+A run of the same command at an earlier commit (23bc751) gave 601 frames in
+19.9 s with the same shape of timings (ttft 6.57 s, first audio 10.15 s), so the
+spread is the brain's, not the gateway's. One further run did **not** finish
+inside the device's 30 s wait at all: two `tts sentence_start` frames had
+arrived and the turn was still streaming when the synthetic device gave up (the
+brain had just answered several probe turns). The gateway stayed inside its own
+cap and cancelled cleanly when the socket closed; `tools/fake_device.py` now
+waits 60 s by default. Expect TTFT variance until T057 measures the 20-turn
+distribution.
 
 ### Against the budget
 
@@ -113,14 +117,14 @@ T057 measures the 20-turn distribution.
 
 SC-001 (< 3.0 s median, < 4.0 s p90, last voiced frame → first audible word)
 therefore **cannot be met on this host as the brain runs today**: in the real
-process the first audible word arrived 10.15 s after the last voiced frame —
-6.57 s of Hermes TTFT, 0.93 s of whisper, 2.35 s to synthesise the first
-sentence. The gateway's own plumbing (VAD close, Opus encode, send) contributes
-well under 150 ms. Two fixes belong to later cards, not this one: the brain's
-~16.7 k-token prompt/tool budget (T011, T057) and a shorter first sentence from
-the chunker when the brain's opening sentence is long. T057 owns the 20-turn
-percentile run; this file records the number so that conversation starts from
-evidence.
+process the first audible word arrived 12.32 s after the last voiced frame —
+6.35 s of Hermes TTFT, 0.95 s of whisper, 4.71 s to synthesise the first
+sentence (an earlier run: 10.15 s total, 6.57 s TTFT, 2.35 s synthesis). The
+gateway's own plumbing (VAD close, Opus encode, send) contributes well under
+150 ms. Two fixes belong to later cards, not this one: the brain's ~16.7 k-token
+prompt/tool budget (T011, T057) and a shorter first sentence from the chunker
+when the brain's opening sentence is long. T057 owns the 20-turn percentile run;
+this file records the number so that conversation starts from evidence.
 
 ## Twenty consecutive turns (SC-004)
 
