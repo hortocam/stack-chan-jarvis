@@ -106,7 +106,7 @@ def test_the_expected_loop_passes() -> None:
         lambda log: log.insert(2, {"type": "stt", "session_id": "s", "text": "again"}),
         lambda log: log[0].update(session_id="other"),  # foreign session id
         lambda log: log[-1].update(state="start"),  # never stopped
-        lambda log: log.insert(-1, {"type": "llm", "session_id": "s", "emotion": "sad"}),
+        lambda log: log.insert(-1, {"type": "mcp", "session_id": "s", "payload": {}}),
     ],
 )
 def test_wrong_sequences_are_rejected(mutate) -> None:
@@ -115,6 +115,22 @@ def test_wrong_sequences_are_rejected(mutate) -> None:
 
     with pytest.raises(SequenceMismatch):
         check_loop_sequence(log, audio_frames=17, session_id="s")
+
+
+def test_an_acknowledged_turn_is_accepted() -> None:
+    """One llm/sentence for the acknowledgement, then the answer's own pair."""
+
+    log = [
+        {"type": "stt", "session_id": "s", "text": "what time is it"},
+        {"type": "llm", "session_id": "s", "emotion": "neutral", "text": "Right."},
+        {"type": "tts", "session_id": "s", "state": "start"},
+        {"type": "tts", "session_id": "s", "state": "sentence_start", "text": "Right."},
+        {"type": "llm", "session_id": "s", "emotion": "neutral", "text": "Nine fifteen."},
+        {"type": "tts", "session_id": "s", "state": "sentence_start", "text": "Nine fifteen."},
+        {"type": "tts", "session_id": "s", "state": "stop"},
+    ]
+
+    check_loop_sequence(log, audio_frames=33, session_id="s")
 
 
 def test_no_audio_after_tts_stop_is_checked_separately() -> None:

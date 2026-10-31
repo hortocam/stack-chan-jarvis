@@ -21,12 +21,13 @@ __all__ = [
 
 
 @pytest.fixture
-async def harness_factory():
+async def harness_factory(tmp_path):
     """Start one or more gateways (each with its own fakes) and close them all."""
 
     started: list[Harness] = []
 
     async def start(**env: str) -> Harness:
+        env.setdefault("JG_ACK_CACHE_DIR", str(tmp_path / f"ack-cache-{len(started)}"))
         instance = await start_harness(**env)
         started.append(instance)
         return instance
