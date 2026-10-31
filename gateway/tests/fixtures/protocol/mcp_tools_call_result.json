@@ -1,0 +1,17 @@
+{
+  "session_id": "0123456789abcdef0123456789abcdef",
+  "type": "mcp",
+  "payload": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"yaw\": 0, \"pitch\": 0}"
+        }
+      ],
+      "isError": false
+    }
+  }
+}

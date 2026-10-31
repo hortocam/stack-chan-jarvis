@@ -1,0 +1,18 @@
+{
+  "session_id": "0123456789abcdef0123456789abcdef",
+  "type": "mcp",
+  "payload": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "protocolVersion": "2024-11-05",
+      "capabilities": {
+        "tools": {}
+      },
+      "serverInfo": {
+        "name": "stack-chan",
+        "version": "1.0.0"
+      }
+    }
+  }
+}
