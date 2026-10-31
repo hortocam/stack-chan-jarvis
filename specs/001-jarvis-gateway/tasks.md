@@ -77,50 +77,50 @@ at `gateway/systemd/`, project docs under `docs/`.
 
 **⚠️ CRITICAL**: no user-story work starts until T015 is green.
 
-- [ ] T007 Build `gateway/jarvis_gateway/protocol.py`: parse device `hello`/`listen`/`abort`/`mcp`
+- [X] T007 Build `gateway/jarvis_gateway/protocol.py`: parse device `hello`/`listen`/`abort`/`mcp`
   text frames, build server `hello`/`stt`/`llm`/`tts`, enforce `session_id` on every outgoing
   message, ignore unknown types with one debug log, and raise a typed `ProtocolError` for malformed
   JSON or missing `type`. Contract tests in `gateway/tests/contract/test_protocol.py` load every
   T002 fixture and assert round-trip equality; malformed and unknown-type cases assert the
   documented behaviour.
-- [ ] T008 [P] `gateway/jarvis_gateway/jsonrpc.py`: request/response builders, monotonically
+- [X] T008 [P] `gateway/jarvis_gateway/jsonrpc.py`: request/response builders, monotonically
   increasing id per session, pending-future registry keyed by id, `-32601`/`-32000`/`-32602` error
   constructors, and a single-flight timeout wrapper. Unit tests in
   `gateway/tests/unit/test_jsonrpc.py` cover id matching, out-of-order responses, late responses
   after timeout (dropped, not raised), and duplicate ids.
-- [ ] T009 `gateway/jarvis_gateway/audio.py` codec half: PyAV-based Opus decoder (16 kHz mono) and
+- [X] T009 `gateway/jarvis_gateway/audio.py` codec half: PyAV-based Opus decoder (16 kHz mono) and
   encoder (24 kHz mono), with an import-and-round-trip smoke test that runs **on CT 914** in the
   project venv. `gateway/tests/unit/test_audio_codec.py` decodes the ten T003 packets to expected
   sample counts and proves `decode(encode(pcm))` returns the same number of samples with SNR above
   a documented threshold. If PyAV cannot be installed on this host, this task stops and escalates
   rather than silently switching codecs (plan risk 2).
-- [ ] T010 Audio framing and resampling half: `pcm16_16k_to_24k`, `frame_60ms` (1440 samples at
+- [X] T010 Audio framing and resampling half: `pcm16_16k_to_24k`, `frame_60ms` (1440 samples at
   24 kHz, 960 at 16 kHz), tail padding on the final frame, and byte-level PCM16 helpers. Tests in
   `gateway/tests/unit/test_audio_framing.py` assert exact frame sizes, no dropped samples, padded
   tail shorter than one frame, and that 24 kHz output has exactly 60 ms per packet. Also asserts the
   decoder accepts packets that our encoder produced at 16 kHz for the uplink fixture path.
-- [ ] T011 Spike and record the live brain contract in `docs/hermes-api-notes.md`: call
+- [X] T011 Spike and record the live brain contract in `docs/hermes-api-notes.md`: call
   `GET {JG_HERMES_BASE_URL}/v1/models` with the configured key, record the advertised model id, run
   one streamed chat completion with and without `X-Hermes-Session-Key`, and record whether the
   second turn sees the first turn's context (asserted by asking it to repeat a word). Capture the
   SSE chunk shape as `gateway/tests/fixtures/protocol/sse_chunk.txt`. Update the `JG_HERMES_*`
   defaults in `.env.example` to the observed values. No service code.
-- [ ] T012 [P] `gateway/jarvis_gateway/vad.py`: RMS energy VAD with hysteresis, speech-start after
+- [X] T012 [P] `gateway/jarvis_gateway/vad.py`: RMS energy VAD with hysteresis, speech-start after
   2 voiced frames, end after `JG_VAD_SILENCE_MS`, minimum speech, and a hard 30 s cap that reports
   `forced=True`. Tests in `gateway/tests/unit/test_vad.py` feed the T003 WAVs and assert: silence
   yields no utterance; a 100 ms burst yields `too_short`; normal speech yields start/end at the
   expected frame indices; the 35 s file forces end exactly at the cap; thresholds from config are
   honoured.
-- [ ] T013 [P] `gateway/jarvis_gateway/session.py`: `DeviceSession`, `SessionRegistry`
+- [X] T013 [P] `gateway/jarvis_gateway/session.py`: `DeviceSession`, `SessionRegistry`
   (get-or-replace by device id, close-previous callback, idle scan, counters), state enum matching
   plan's state machine. Unit tests in `gateway/tests/unit/test_session.py`: two connects for one
   device replace the first exactly once; distinct devices coexist; idle scan closes only expired
   sessions; closing clears utterance/turn references; registry counts are correct.
-- [ ] T014 [P] `gateway/jarvis_gateway/chunker.py`: sentence segmentation for streaming TTS (split
+- [X] T014 [P] `gateway/jarvis_gateway/chunker.py`: sentence segmentation for streaming TTS (split
   on `. ! ? …` and newline, flush at ≥20 chars, hard split at 220, flush remainder at end, no split
   inside decimal numbers or common abbreviations such as "Mr."). Unit tests in
   `gateway/tests/unit/test_chunker.py` with 15+ cases, including "Dr. Smith" and "3.5 seconds".
-- [ ] T015 `gateway/jarvis_gateway/ws_app.py` + app wiring in `gateway/jarvis_gateway/__main__.py`:
+- [X] T015 `gateway/jarvis_gateway/ws_app.py` + app wiring in `gateway/jarvis_gateway/__main__.py`:
   aiohttp application factory with `GET /healthz`, `POST|GET /xiaozhi/ota/` (handler stub returning a
   fixed manifest until T031), and the WebSocket route. Implements handshake auth (constant-time
   compare of `Authorization: Bearer`), required headers, upgrade response, server `hello`, dispatch
@@ -129,7 +129,7 @@ at `gateway/systemd/`, project docs under `docs/`.
   handshake gets hello with our session id and 24 kHz params; wrong/missing token gets 401 with no
   session created; missing `Protocol-Version`/`Device-Id`/`Client-Id` gets 400/401; protocol version
   2 gets 426; no hello within the timeout closes 1008; binary before hello closes 1003.
-- [ ] T016 [P] `gateway/jarvis_gateway/control.py`: UNIX-socket server (newline-delimited JSON,
+- [X] T016 [P] `gateway/jarvis_gateway/control.py`: UNIX-socket server (newline-delimited JSON,
   `tools/list` and `tools/call`, `-32000` not-connected), socket file lifecycle (create on start,
   remove on stop, 0660), and a client used by the bridge. Tests in
   `gateway/tests/unit/test_control.py`: round trip, malformed line, oversized line, client timeout,
