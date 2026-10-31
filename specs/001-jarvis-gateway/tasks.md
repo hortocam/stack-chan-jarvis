@@ -149,60 +149,60 @@ be rejected cleanly when it misbehaves. No audio pipeline yet.
 
 ### Tests for User Story 1 (write first, observe failing) ⚠️
 
-- [ ] T017 [P] [US1] Contract test `gateway/tests/contract/test_turn_sequence.py`: drives the app
+- [X] T017 [P] [US1] Contract test `gateway/tests/contract/test_turn_sequence.py`: drives the app
   over a real socket with fake_device and fake upstreams; asserts the ordered sequence hello →
   (listen start) → stt → llm(emotion in the firmware set) → tts start → sentence_start → ≥1 binary
   frame → tts stop, one session id throughout, and no message after `tts stop` until the next turn.
-- [ ] T018 [P] [US1] Integration test `gateway/tests/integration/test_loop.py` (marker `live`): same
+- [X] T018 [P] [US1] Integration test `gateway/tests/integration/test_loop.py` (marker `live`): same
   journey against real whisper and the real Hermes server (fake edge-tts), asserting the transcript
   matches `utterance_ok.wav` and that follow-up turns keep context.
-- [ ] T019 [P] [US1] Edge-case tests `gateway/tests/contract/test_empty_utterance.py`: silence and a
+- [X] T019 [P] [US1] Edge-case tests `gateway/tests/contract/test_empty_utterance.py`: silence and a
   100 ms noise burst produce no `stt`/`llm`/`tts`, no binary frames, and the session accepts the next
   turn; `listen stop` with no audio and a 30 s forced end behave the same way.
 
 ### Implementation for User Story 1
 
-- [ ] T020 [US1] `gateway/jarvis_gateway/stt.py`: multipart WAV upload to
+- [X] T020 [US1] `gateway/jarvis_gateway/stt.py`: multipart WAV upload to
   `{JG_STT_URL}/v1/audio/transcriptions`, JSON `text` extraction, whitespace strip, timeout and
   non-2xx mapping to a typed error. Unit tests against fake_whisper: success, empty text, 500,
   timeout, oversized response.
-- [ ] T021 [US1] `gateway/jarvis_gateway/brain.py`: streamed SSE chat completion with
+- [X] T021 [US1] `gateway/jarvis_gateway/brain.py`: streamed SSE chat completion with
   `X-Hermes-Session-Key: stackchan-<device-id>`, `Authorization` from config, model from config,
   incremental text callback, first-token timestamp, cancellation, and non-2xx/timeout handling. Unit
   tests against fake_hermes: chunk assembly across split SSE lines, `[DONE]`, error before and after
   first token, cancel mid-stream, and header assertion.
-- [ ] T022 [US1] `gateway/jarvis_gateway/tts.py`: synthesise one sentence via edge-tts, decode MP3 to
+- [X] T022 [US1] `gateway/jarvis_gateway/tts.py`: synthesise one sentence via edge-tts, decode MP3 to
   PCM, resample to 24 kHz, frame to 60 ms Opus, expose both a block iterator and a cancel hook. Unit
   tests against fake_edge_tts: correct frame count for a known sentence length, cancellation stops
   mid-sentence, per-sentence failure raises a typed error.
-- [ ] T023 [US1] `gateway/jarvis_gateway/emotion.py`: map reply text and tool use to the firmware
+- [X] T023 [US1] `gateway/jarvis_gateway/emotion.py`: map reply text and tool use to the firmware
   emotion set with a documented keyword table and a `neutral` default. Unit tests cover each
   emotion, unicode/emoji input, empty text, and that the function never returns a string outside the
   accepted set.
-- [ ] T024 [US1] `gateway/jarvis_gateway/turn.py`: the orchestrator — utterance → stt message →
+- [X] T024 [US1] `gateway/jarvis_gateway/turn.py`: the orchestrator — utterance → stt message →
   brain stream → chunker → per-sentence `sentence_start` + frames → single `tts stop`; one turn at a
   time per session; T017 and T018 drive it. Emits `llm` with the chosen emotion before the first
   frame. On empty transcript, ends with no further messages (T019 green).
-- [ ] T025 [US1] Failure paths in `turn.py`/`ws_app.py` per FR-018: STT timeout/error, brain non-2xx,
+- [X] T025 [US1] Failure paths in `turn.py`/`ws_app.py` per FR-018: STT timeout/error, brain non-2xx,
   brain stall past `JG_HERMES_TIMEOUT_S`, per-sentence TTS failure with the rest continuing, and
   all-sentences-failed. Each speaks `JG_APOLOGY_TEXT` when the user is waiting, ends with exactly one
   `tts stop` if speech began, and leaves the session usable. Contract tests in
   `gateway/tests/contract/test_failures.py` cover each branch and assert no unhandled task exception
   is logged.
-- [ ] T026 [US1] Verify edge-tts on CT 914 inside the project venv: pin the version, confirm
+- [X] T026 [US1] Verify edge-tts on CT 914 inside the project venv: pin the version, confirm
   `en-GB-RyanNeural` synthesis works, measure first-audio latency for a 20-char and a 60-char
   sentence over five runs each, and record numbers plus the exact command in
   `docs/latency-baseline.md` (skeleton). If the voice or endpoint is unavailable, stop and escalate
   rather than switching voice silently.
-- [ ] T027 [US1] Finish `gateway/tools/fake_device.py`: header construction, hello exchange,
+- [X] T027 [US1] Finish `gateway/tools/fake_device.py`: header construction, hello exchange,
   WAV→Opus 16 kHz framing with pacing, message collector with ordering assertions (`--expect-loop`),
   audio capture to `--out-dir`, `--ota` mode placeholder, exit codes, and
   `gateway/tests/unit/test_fake_device.py` for argument parsing and frame pacing. Then run the 20×
   loop and record the result in the task log (SC-004).
-- [ ] T028 [US1] Wire per-turn timing records into `turn.py`/`logging.py`: `vad_end_ms`, `stt_ms`,
+- [X] T028 [US1] Wire per-turn timing records into `turn.py`/`logging.py`: `vad_end_ms`, `stt_ms`,
   `ttft_ms`, `first_audio_ms`, `tts_end_ms`, frame count, sentence count, outcome. Contract test
   asserts all fields present, monotonic, and absent for a turn that produced no speech.
-- [ ] T029 [US1] `listen stop` handling: treat the device's stop as end-of-utterance in manual mode,
+- [X] T029 [US1] `listen stop` handling: treat the device's stop as end-of-utterance in manual mode,
   close the utterance immediately, and ignore a later stop for the same utterance. Contract test with
   a client that sends stop 200 ms into speech.
 

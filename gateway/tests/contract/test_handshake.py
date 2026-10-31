@@ -17,7 +17,7 @@ from aiohttp.test_utils import TestClient, TestServer
 
 from jarvis_gateway.config import Config, load_config
 from jarvis_gateway.session import SessionState
-from jarvis_gateway.ws_app import create_app
+from jarvis_gateway.ws_app import REGISTRY, create_app
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "protocol"
 DEVICE_ID = "aa:bb:cc:dd:ee:ff"
@@ -74,7 +74,7 @@ async def test_valid_handshake_gets_a_server_hello_with_a_session(gateway) -> No
         "channels": 1,
         "frame_duration": 60,
     }
-    session = app["registry"].get(DEVICE_ID)
+    session = app[REGISTRY].get(DEVICE_ID)
     assert session is not None
     assert session.session_id == reply["session_id"]
     assert session.state is SessionState.IDLE
@@ -106,7 +106,7 @@ async def test_rejected_token_gets_401_and_creates_no_session(gateway, headers) 
         await client.ws_connect("/xiaozhi/v1/", headers=headers)
 
     assert excinfo.value.status == 401
-    assert len(app["registry"]) == 0
+    assert len(app[REGISTRY]) == 0
 
 
 @pytest.mark.parametrize("missing", ["Protocol-Version", "Device-Id", "Client-Id"])
@@ -118,7 +118,7 @@ async def test_missing_required_header_gets_400(gateway, missing: str) -> None:
         await client.ws_connect("/xiaozhi/v1/", headers=headers)
 
     assert excinfo.value.status == 400
-    assert len(app["registry"]) == 0
+    assert len(app[REGISTRY]) == 0
 
 
 async def test_binary_protocol_version_two_gets_426(gateway) -> None:
@@ -129,7 +129,7 @@ async def test_binary_protocol_version_two_gets_426(gateway) -> None:
         await client.ws_connect("/xiaozhi/v1/", headers=headers)
 
     assert excinfo.value.status == 426
-    assert len(app["registry"]) == 0
+    assert len(app[REGISTRY]) == 0
 
 
 async def test_missing_hello_closes_1008(gateway) -> None:
@@ -139,7 +139,7 @@ async def test_missing_hello_closes_1008(gateway) -> None:
     await ws.receive()
 
     assert ws.close_code == 1008
-    assert len(app["registry"]) == 0
+    assert len(app[REGISTRY]) == 0
 
 
 async def test_binary_before_hello_closes_1003(gateway) -> None:
@@ -150,7 +150,7 @@ async def test_binary_before_hello_closes_1003(gateway) -> None:
     await ws.receive()
 
     assert ws.close_code == 1003
-    assert len(app["registry"]) == 0
+    assert len(app[REGISTRY]) == 0
 
 
 async def test_unparseable_json_before_hello_closes_1003(gateway) -> None:
@@ -173,7 +173,7 @@ async def test_unparseable_json_after_hello_closes_1003(gateway) -> None:
     await ws.receive()
 
     assert ws.close_code == 1003
-    assert len(app["registry"]) == 0
+    assert len(app[REGISTRY]) == 0
 
 
 async def test_unknown_message_type_is_ignored_and_the_session_lives(gateway) -> None:
@@ -186,7 +186,7 @@ async def test_unknown_message_type_is_ignored_and_the_session_lives(gateway) ->
     await asyncio.sleep(0.05)
 
     assert not ws.closed
-    assert app["registry"].get(DEVICE_ID) is not None
+    assert app[REGISTRY].get(DEVICE_ID) is not None
     await ws.close()
 
 
@@ -227,7 +227,7 @@ async def test_a_second_connection_for_the_same_device_replaces_the_first(gatewa
     second_hello = json.loads((await second.receive()).data)
 
     assert first_hello["session_id"] != second_hello["session_id"]
-    assert app["registry"].get(DEVICE_ID).session_id == second_hello["session_id"]
+    assert app[REGISTRY].get(DEVICE_ID).session_id == second_hello["session_id"]
     # The client only processes the server's close frame when it reads.
     message = await asyncio.wait_for(first.receive(), timeout=1.0)
     assert message.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSED)
