@@ -101,3 +101,76 @@ speaker.
 | **UI-2** | Conversation: marble states + audio-reactive rim | device; emotion events we already send |
 | **UI-3** | Event pings: focus/headline/return-home | gateway feed for news + lab events |
 | **UI-4** | Transitions, sleeping state, skin polish | device |
+
+## Wire contract — `self.ui.*` over the existing MCP session
+
+**Status:** implemented in the gateway (card `t_b4d67050`); the firmware app builds to this
+section. No second socket, no polling: each UI call is one JSON-RPC `tools/call` inside the
+`type: "mcp"` frame the voice socket already carries.
+
+### Envelope (gateway → device)
+
+```json
+{
+  "session_id": "<the id from the server hello>",
+  "type": "mcp",
+  "payload": {
+    "jsonrpc": "2.0",
+    "id": 7,
+    "method": "tools/call",
+    "params": { "name": "self.ui.log_line", "arguments": { "text": "git: PR #11 merged" } }
+  }
+}
+```
+
+The device answers with the same `id` in an `mcp` payload, exactly as `mcp_server.cc` does for the
+body tools: `result.content[]` + `result.isError`, or `error{code,message}`. The four tools must
+appear in `tools/list`; the firmware's `tools/call` dispatch accepts them without requiring an
+`initialize` first (v2.2.4 does not gate on it).
+
+### Tools
+
+| Tool | Arguments | Limits / defaults |
+|---|---|---|
+| `self.ui.globe_focus` | `lat` number, `lon` number, `label` string, `headline` string, `hold_ms` int | lat −90…90, lon −180…180, label 1…24 chars, headline 1…72 chars, hold_ms 1000…60000, default **8000**. Ease (~600 ms), pulse, hold, return home. |
+| `self.ui.log_line` | `text` string | 1…120 chars; one line in the log column (newest first); the device may wrap or elide. |
+| `self.ui.state` | `name` string | one of `idle`, `listening`, `thinking`, `speaking`, `attention`, `sleeping`. |
+| `self.ui.clocks` | `utc` string, `local` string, `tz` string | `utc`/`local` are `HH:MM` 24-hour; `tz` is a label of 1…8 characters (`EST`). Pushed on the minute. |
+
+Every argument is validated in the gateway. An unknown tool name, a missing field, an extra field
+or an out-of-range value is refused before a frame is sent and logged at debug; it never reaches
+the device. This is deliberate: the device is a display, not a validator.
+
+### Delivery rules
+
+- **Best-effort.** A call is dispatched in the background; the voice turn never awaits it. The
+  deadline is 1.0 s. A timeout is one debug line and the call is dropped; a device `error` or
+  `isError: true` is one warning line and the call is dropped. No retry.
+- **One queue, bounded.** The bus holds at most 64 events. When full it drops the oldest, not the
+  newest.
+- **Coalescing.** `state`, `clocks` and `globe_focus` replace their own pending value (latest
+  wins). An identical `log_line` replaces itself.
+- **Rate cap.** At most 4 UI calls per rolling second are dispatched; excess is dropped with a
+  counter. A webhook storm cannot flood the screen.
+- **Honest when alone.** With no device attached, `publish` drops immediately with a debug line.
+  Nothing is buffered, so a reconnect never receives a backlog.
+
+### Sources
+
+`jarvis_gateway/ui_sources.py` maps the payloads the lab already produces to events, in this
+order: git/PR (Gitea or GitHub), kanban card transitions, cron digests, Uptime-Kuma alerts.
+`feed.py` is the headline source (news + markets); it starts as a **canned** list behind
+`JG_UI_FEED_ENABLED=false` and is not a live feed yet. The gateway adds no webhook listener — the
+existing observer hands the decoded payload to `UiEventBus.publish_source`.
+
+Blocked/failed kanban cards and DOWN alerts also raise `state: attention`; everything else is a
+log line. There is no automatic `listening` / `thinking` / `speaking` frame: the firmware already
+sees `stt`, `llm` and `tts` on the same socket and derives those states from them (UI-2), so the
+voice path stays free of extra writes. `self.ui.state` is for idle/attention/sleeping overrides.
+
+### Counters
+
+`UiEventBus.stats` exposes `dispatched`, `coalesced`, `dropped_no_device`, `dropped_queue_full`,
+`dropped_rate`, `pending`, `in_flight`; `UiChannel.stats` exposes `sent`, `ok`, `errors`,
+`timeouts`, `dropped`. These are the evidence for the "flooded queue is capped" test.
+

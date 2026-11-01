@@ -36,6 +36,7 @@ import aiohttp
 
 from jarvis_gateway.audio import UPLINK_RATE, OpusEncoder, frame_60ms
 from jarvis_gateway.emotion import ACCEPTED_EMOTIONS
+from jarvis_gateway.ui import UI_TOOLS
 
 __all__ = [
     "DEFAULT_DEVICE_ID",
@@ -121,6 +122,7 @@ class SessionLog:
     sent_json: list[dict[str, Any]] = field(default_factory=list)
     received_json: list[dict[str, Any]] = field(default_factory=list)
     received_audio: list[bytes] = field(default_factory=list)
+    mcp_calls: list[dict[str, Any]] = field(default_factory=list)
     sent_frames: int = 0
     frame_send_times: list[float] = field(default_factory=list)
     server_hello: dict[str, Any] | None = None
@@ -144,6 +146,7 @@ class DeviceClient:
         device_id: str = DEFAULT_DEVICE_ID,
         client_id: str | None = None,
         features_mcp: bool = True,
+        mcp_tools: set[str] | None = None,
         pacer: Pacer | None = None,
         hello_timeout_s: float = 10.0,
     ) -> None:
@@ -156,6 +159,10 @@ class DeviceClient:
         self.device_id = device_id
         self.client_id = client_id or str(uuid.uuid4())
         self.features_mcp = features_mcp
+        #: The MCP server half of the robot. UI tools are registered by default so
+        #: a test can assert the gateway only calls tools the firmware advertises.
+        self.mcp_tools: set[str] = set(UI_TOOLS) if mcp_tools is None else set(mcp_tools)
+        self._next_mcp_id = 1000
         self.pacer = pacer or Pacer()
         self.hello_timeout_s = hello_timeout_s
         self.log = SessionLog()
@@ -261,14 +268,146 @@ class DeviceClient:
         try:
             async for message in self._ws:
                 async with self._condition:
+                    document: dict[str, Any] | None = None
                     if message.type is aiohttp.WSMsgType.TEXT:
-                        self.log.received_json.append(json.loads(message.data))
+                        parsed = json.loads(message.data)
+                        self.log.received_json.append(parsed)
+                        document = parsed
                     elif message.type is aiohttp.WSMsgType.BINARY:
                         self.log.received_audio.append(bytes(message.data))
                     self._revision += 1
                     self._condition.notify_all()
+                if document is not None and document.get("type") == "mcp":
+                    payload = document.get("payload")
+                    if isinstance(payload, dict):
+                        await self._handle_mcp(payload)
         except (asyncio.CancelledError, aiohttp.ClientError, json.JSONDecodeError):
             pass
+
+    # -- MCP server half -------------------------------------------------
+
+    async def _handle_mcp(self, payload: dict[str, Any]) -> None:
+        """Answer the gateway as the firmware's ``mcp_server.cc`` would."""
+
+        self.log.mcp_calls.append(payload)
+        method = payload.get("method")
+        rpc_id = payload.get("id")
+        if (
+            payload.get("jsonrpc") != "2.0"
+            or isinstance(rpc_id, bool)
+            or not isinstance(rpc_id, int)
+            or not isinstance(method, str)
+        ):
+            return  # a notification or a malformed request: no reply
+
+        if method == "initialize":
+            result: dict[str, Any] = {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "stack-chan", "version": "1.0.0"},
+            }
+            await self._send_mcp_result(rpc_id, result)
+            return
+        if method == "tools/list":
+            await self._send_mcp_result(
+                rpc_id,
+                {
+                    "tools": [
+                        {
+                            "name": name,
+                            "description": "Jarvis UI tool",
+                            "inputSchema": {"type": "object", "properties": {}},
+                        }
+                        for name in sorted(self.mcp_tools)
+                    ]
+                },
+            )
+            return
+        if method == "tools/call":
+            params = payload.get("params")
+            if not isinstance(params, dict):
+                await self._send_mcp_error(rpc_id, -32602, "Missing params")
+                return
+            name = params.get("name")
+            if not isinstance(name, str) or not name:
+                await self._send_mcp_error(rpc_id, -32602, "Missing name")
+                return
+            arguments = params.get("arguments", {})
+            if not isinstance(arguments, dict):
+                await self._send_mcp_error(rpc_id, -32602, "Invalid arguments")
+                return
+            if name not in self.mcp_tools:
+                await self._send_mcp_error(rpc_id, -32601, f"Unknown tool: {name}")
+                return
+            await self._send_mcp_result(
+                rpc_id,
+                {
+                    "content": [
+                        {"type": "text", "text": json.dumps({"ok": True, "tool": name})}
+                    ],
+                    "isError": False,
+                },
+            )
+            return
+        await self._send_mcp_error(rpc_id, -32601, f"Method not implemented: {method}")
+
+    async def _send_mcp_result(self, rpc_id: int, result: dict[str, Any]) -> None:
+        await self.send_json(
+            {
+                "type": "mcp",
+                "session_id": self.log.session_id,
+                "payload": {"jsonrpc": "2.0", "id": rpc_id, "result": result},
+            }
+        )
+
+    async def _send_mcp_error(self, rpc_id: int, code: int, message: str) -> None:
+        await self.send_json(
+            {
+                "type": "mcp",
+                "session_id": self.log.session_id,
+                "payload": {
+                    "jsonrpc": "2.0",
+                    "id": rpc_id,
+                    "error": {"code": code, "message": message},
+                },
+            }
+        )
+
+    async def mcp_request(self, method: str, params: dict[str, Any] | None = None) -> int:
+        """Send one MCP request from the device and return its id."""
+
+        if not isinstance(method, str) or not method:
+            raise ValueError("method must be a non-empty string")
+        rpc_id = self._next_mcp_id
+        self._next_mcp_id += 1
+        payload: dict[str, Any] = {"jsonrpc": "2.0", "id": rpc_id, "method": method}
+        if params is not None:
+            payload["params"] = params
+        await self.send_json({"type": "mcp", "session_id": self.log.session_id, "payload": payload})
+        return rpc_id
+
+    async def send_mcp_tools_call(self, name: str, arguments: dict[str, Any] | None = None) -> int:
+        """A raw ``tools/call`` from the test double, bypassing the gateway."""
+
+        return await self.mcp_request(
+            "tools/call", {"name": name, "arguments": arguments or {}}
+        )
+
+    async def wait_for_mcp_call(self, name: str, timeout: float) -> dict[str, Any]:  # noqa: ASYNC109
+        """Wait for a gateway ``tools/call`` naming ``name``."""
+
+        return await self.wait_for(
+            lambda m: (
+                m.get("type") == "mcp"
+                and (m.get("payload") or {}).get("method") == "tools/call"
+                and ((m.get("payload") or {}).get("params") or {}).get("name") == name
+            ),
+            timeout,
+        )
+
+    @property
+    def mcp_calls(self) -> list[dict[str, Any]]:
+        return self.log.mcp_calls
 
     def tts_stops(self) -> list[dict[str, Any]]:
         return [

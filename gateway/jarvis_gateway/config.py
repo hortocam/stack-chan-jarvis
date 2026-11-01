@@ -57,6 +57,7 @@ class Config:
     ack_delay_ms: int
     ack_cache_dir: str
     first_chunk_words: int
+    ui_feed_enabled: bool
 
 
 _DEFAULTS: dict[str, str] = {
@@ -86,6 +87,7 @@ _DEFAULTS: dict[str, str] = {
     "JG_ACK_DELAY_MS": "300",
     "JG_ACK_CACHE_DIR": DEFAULT_ACK_CACHE_DIR,
     "JG_FIRST_CHUNK_WORDS": "12",
+    "JG_UI_FEED_ENABLED": "false",
 }
 
 _TRUE = {"1", "true", "yes", "on"}
@@ -213,4 +215,5 @@ def load_config(env: Mapping[str, str]) -> Config:
         ack_delay_ms=ack_delay_ms,
         ack_cache_dir=_path("JG_ACK_CACHE_DIR", get("JG_ACK_CACHE_DIR")),
         first_chunk_words=first_chunk_words,
+        ui_feed_enabled=_bool("JG_UI_FEED_ENABLED", get("JG_UI_FEED_ENABLED")),
     )

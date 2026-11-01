@@ -33,6 +33,7 @@ from .ack import AckVoice
 from .audio import UPLINK_RATE, AudioError, OpusDecoder
 from .brain import BrainClient
 from .config import Config
+from .feed import CannedFeed, FeedPump
 from .protocol import (
     Abort,
     Hello,
@@ -47,6 +48,8 @@ from .session import DeviceSession, SessionRegistry, SessionState
 from .stt import SttClient
 from .tts import EdgeTts, TtsEngine
 from .turn import TurnRunner
+from .ui import UiChannel
+from .ui_events import ClockTicker, UiEventBus
 from .vad import Vad, frame_rms
 
 __all__ = [
@@ -57,6 +60,7 @@ __all__ = [
     "REGISTRY",
     "STT",
     "TTS",
+    "UI_BUS",
     "create_app",
     "run",
 ]
@@ -74,6 +78,8 @@ STT = web.AppKey("stt", Any)
 BRAIN = web.AppKey("brain", Any)
 TTS = web.AppKey("tts", Any)
 ACK = web.AppKey("ack", AckVoice)
+UI_BUS = web.AppKey("ui_bus", UiEventBus)
+UI_TICKERS = web.AppKey("ui_tickers", list)
 
 HELLO_TIMEOUT_S = 10.0
 MAX_MESSAGE_BYTES = 64 * 1024
@@ -189,6 +195,19 @@ async def _dispatch(
         async with runtime.lock:
             if not ws.closed:
                 await ws.send_bytes(packet)
+
+    bus: UiEventBus = app[UI_BUS]
+    ui: UiChannel | None = None
+    if session.mcp_enabled:
+
+        def _next_rpc_id() -> int:
+            value = session.next_rpc_id
+            session.next_rpc_id += 1
+            return value
+
+        ui = UiChannel(send_json, session_id=session.session_id, next_id=_next_rpc_id)
+        session.ui = ui
+        bus.attach(ui)
 
     async def run_turn(utterance, vad_end_ms: float) -> None:
         session.utterance = utterance
@@ -307,10 +326,19 @@ async def _dispatch(
             elif isinstance(parsed, Abort):
                 logger.debug("abort received with no cancellation handler yet")
             elif isinstance(parsed, Mcp):
-                logger.debug("mcp payload received before the MCP client lands")
+                if session.ui is None or not session.ui.handle_payload(parsed.payload):
+                    logger.debug(
+                        "mcp payload with no waiting UI call",
+                        extra={"session_id": session.session_id},
+                    )
             elif isinstance(parsed, Hello):
                 logger.debug("duplicate hello ignored")
     finally:
+        if ui is not None:
+            bus.detach(ui)
+            ui.close("session closed")
+            if session.ui is ui:
+                session.ui = None
         if runtime.turn_task is not None:
             runtime.turn_task.cancel()
             with contextlib.suppress(BaseException):
@@ -348,6 +376,7 @@ async def websocket_handler(request: web.Request) -> web.StreamResponse:
         protocol_version=int(request.headers["Protocol-Version"]),
         session_id=uuid.uuid4().hex,
         state=SessionState.IDLE,
+        mcp_enabled=bool(hello.features and hello.features.get("mcp")),
     )
     connections[session.session_id] = ws
     registry.register(session)
@@ -450,6 +479,8 @@ def create_app(
     app[STARTED_AT] = clock()
     app[HELLO_TIMEOUT] = hello_timeout
     app[CONNECTIONS] = {}
+    app[UI_BUS] = UiEventBus()
+    app[UI_TICKERS] = []
 
     # One client per process: whisper and the brain keep HTTP connections warm.
     app[STT] = stt or SttClient(config.stt_url, timeout_s=config.stt_timeout_s)
@@ -475,6 +506,31 @@ def create_app(
             logger.exception("acknowledgement warm-up failed")
 
     app.on_startup.append(_warm_ack)
+
+    async def _start_ui(_app: web.Application) -> None:
+        """Start the UI bus and its minute clock; the feed only behind its flag."""
+
+        bus: UiEventBus = _app[UI_BUS]
+        await bus.start()
+        tickers: list[asyncio.Task] = _app[UI_TICKERS]
+        tickers.append(asyncio.create_task(ClockTicker(bus).run()))
+        if config.ui_feed_enabled:
+            tickers.append(
+                asyncio.create_task(FeedPump(CannedFeed(enabled=True), bus).run())
+            )
+
+    app.on_startup.append(_start_ui)
+
+    async def _stop_ui(_app: web.Application) -> None:
+        for task in _app[UI_TICKERS]:
+            task.cancel()
+        for task in _app[UI_TICKERS]:
+            with contextlib.suppress(BaseException):
+                await task
+        _app[UI_TICKERS].clear()
+        await _app[UI_BUS].stop()
+
+    app.on_cleanup.append(_stop_ui)
 
     async def _close_clients(_app: web.Application) -> None:
         for key in (STT, BRAIN):
