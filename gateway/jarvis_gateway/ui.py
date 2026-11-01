@@ -74,12 +74,6 @@ class UiError(ValueError):
     """A UI call that does not match the wire contract."""
 
 
-def _name(value: Any) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise UiError("name must be a non-empty string")
-    return value
-
-
 def _text(value: Any, field_name: str, limit: int) -> str:
     if not isinstance(value, str):
         raise UiError(f"{field_name} must be a string")
@@ -237,7 +231,6 @@ class UiChannel:
         *,
         session_id: str,
         timeout_s: float = UI_CALL_TIMEOUT_S,
-        clock: Callable[[], float] = time.monotonic,
         next_id: Callable[[], int] | None = None,
     ) -> None:
         if not session_id:
@@ -247,7 +240,6 @@ class UiChannel:
         self._send = send
         self._session_id = session_id
         self._timeout_s = timeout_s
-        self._clock = clock
         self._next_id = next_id if next_id is not None else id_allocator().next
         self._pending = PendingRegistry()
         self._stats = UiCallStats()
