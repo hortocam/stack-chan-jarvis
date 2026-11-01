@@ -41,6 +41,8 @@ class DeviceSession:
     next_rpc_id: int = 1
     utterance: Any = None
     turn: Any = None
+    ui: Any = None
+    mcp_enabled: bool = False
     close_reason: str | None = None
     created_at: float = field(default_factory=time.monotonic)
     last_activity: float = field(default_factory=time.monotonic)
@@ -138,5 +140,6 @@ class SessionRegistry:
         session.close_reason = reason
         session.utterance = None
         session.turn = None
+        session.ui = None
         session.tools = []
         session.pending_calls.clear()

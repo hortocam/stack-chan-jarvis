@@ -53,6 +53,7 @@ def test_defaults_match_the_configuration_reference() -> None:
     assert cfg.ack_delay_ms == 300
     assert cfg.ack_cache_dir.endswith("/.cache")
     assert cfg.first_chunk_words == 12
+    assert cfg.ui_feed_enabled is False
 
 
 def test_every_key_can_be_overridden() -> None:
@@ -82,6 +83,7 @@ def test_every_key_can_be_overridden() -> None:
         "JG_ACK_DELAY_MS": "120",
         "JG_ACK_CACHE_DIR": "/tmp/jarvis-cache",
         "JG_FIRST_CHUNK_WORDS": "9",
+        "JG_UI_FEED_ENABLED": "true",
     }
 
     cfg = load_config(env)
@@ -110,6 +112,7 @@ def test_every_key_can_be_overridden() -> None:
     assert cfg.ack_delay_ms == 120
     assert cfg.ack_cache_dir == "/tmp/jarvis-cache"
     assert cfg.first_chunk_words == 9
+    assert cfg.ui_feed_enabled is True
 
 
 def test_config_is_frozen() -> None:
