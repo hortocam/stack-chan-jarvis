@@ -1,242 +1,179 @@
 <!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
+<html><head><meta charset="utf-8">
 <style>
-  html,body { margin:0; background:#050807; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-  .row { padding:16px; display:grid; grid-template-columns: repeat(3, 328px); gap:16px; }
-  .cell { display:flex; flex-direction:column; gap:7px; }
-  .cap { color:#5d7a6c; font-size:11px; line-height:1.35; letter-spacing:.02em; max-width:320px; }
-  .cap b { color:#9df3c6; font-weight:700; font-size:12px; }
-  .dev { width:320px; height:240px; position:relative; overflow:hidden;
-         background: radial-gradient(125% 95% at 50% 48%, #072018 0%, #031009 58%, #010604 100%);
-         border:1px solid #12301f; border-radius:5px; color:#63f2a6;
-         text-shadow:0 0 6px rgba(99,242,166,.4); }
-  .dev:after { content:""; position:absolute; inset:0; pointer-events:none;
-    background: repeating-linear-gradient(0deg, rgba(0,0,0,.30) 0 1px, rgba(0,0,0,0) 1px 3px);
-    mix-blend-mode:multiply; opacity:.5; }
-  .hdr { position:absolute; top:0; left:0; right:0; height:19px; display:flex; align-items:center;
-         justify-content:space-between; padding:0 7px; font-size:8.5px; letter-spacing:.1em;
-         color:#7fd8ab; border-bottom:1px solid #0e2a1c; }
-  .hdr .c { color:#c7ffe2; letter-spacing:.16em; }
-  .hdr .d { color:#367a58; }
-  .logs { position:absolute; left:7px; bottom:7px; width:152px; font-size:7.5px; line-height:1.5; color:#43c184; }
-  .logs div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .logs .t { color:#276246; }
-  .mid { position:absolute; left:0; right:0; top:19px; bottom:0; }
-  .center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); }
-  .tag { position:absolute; right:7px; bottom:7px; font-size:7.5px; letter-spacing:.12em; color:#2f6b4c; }
-  .ping { position:absolute; left:50%; top:26px; transform:translateX(-50%); width:196px;
-    border:1px solid #2f8f63; background:rgba(4,22,15,.92); padding:5px 7px; border-radius:3px;
-    box-shadow:0 0 14px rgba(62,224,142,.18); }
-  .ping .k { font-size:7px; letter-spacing:.16em; color:#8fe3b6; }
-  .ping .h { font-size:9.5px; line-height:1.35; color:#d3ffe8; margin-top:2px; }
-  .ping .m { font-size:7px; color:#4fae82; margin-top:2px; }
-</style>
-</head>
-<body>
+  html,body{margin:0;background:#050807;font-family:ui-monospace,"SF Mono",Menlo,monospace}
+  .row{padding:16px;display:grid;grid-template-columns:repeat(3,328px);gap:16px}
+  .cell{display:flex;flex-direction:column;gap:7px}
+  .cap{color:#5d7a6c;font-size:11px;line-height:1.35;max-width:320px}
+  .cap b{color:#9df3c6;font-size:12px}
+  .dev{width:320px;height:240px;position:relative;overflow:hidden;border:1px solid #12301f;border-radius:5px;
+       background:radial-gradient(125% 95% at 34% 52%,#072018 0%,#031009 60%,#010604 100%);
+       color:#63f2a6;text-shadow:0 0 6px rgba(99,242,166,.4)}
+  .dev:after{content:"";position:absolute;inset:0;pointer-events:none;
+       background:repeating-linear-gradient(0deg,rgba(0,0,0,.3) 0 1px,rgba(0,0,0,0) 1px 3px);
+       mix-blend-mode:multiply;opacity:.5}
+  .hdr{position:absolute;top:0;left:0;right:0;height:19px;display:flex;align-items:center;
+       justify-content:space-between;padding:0 7px;font-size:8.5px;letter-spacing:.1em;
+       color:#7fd8ab;border-bottom:1px solid #0e2a1c}
+  .hdr .c{color:#c7ffe2;letter-spacing:.16em}
+  .hdr .d{color:#367a58}
+  .stage{position:absolute;left:100px;top:120px;transform:translate(-50%,-50%)}
+  .logs{position:absolute;left:7px;bottom:7px;width:150px;font-size:7.5px;line-height:1.5;color:#43c184}
+  .logs div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .logs .t{color:#276246}
+  .side{position:absolute;left:178px;right:7px;top:28px;bottom:26px;display:flex;flex-direction:column;gap:5px;
+        border-left:1px solid #0f2c1d;padding-left:7px}
+  .side .k{font-size:7px;letter-spacing:.16em;color:#8fe3b6}
+  .side .h{font-size:9.5px;line-height:1.4;color:#d3ffe8}
+  .side .m{font-size:7px;color:#4fae82;line-height:1.5}
+  .side .r{font-size:7.5px;color:#3d8f68;line-height:1.5;margin-top:auto}
+  .tag{position:absolute;right:7px;bottom:7px;font-size:7.5px;letter-spacing:.12em;color:#2f6b4c}
+</style></head><body>
+
 <div class="row" id="row1">
-  <div class="cell"><div class="dev" id="d1">
-    <div class="hdr"><span class="c">J A R V I S</span><span>UTC <b>17:56</b></span><span>LOCAL <b>12:56</b></span><span class="d">EST</span></div>
-    <div class="mid"><div class="center"><svg id="g1" width="176" height="176"></svg></div></div>
-    <div class="logs">
-      <div><span class="t">12:54</span> media ▸ 3 imports queued</div>
-      <div><span class="t">12:51</span> lab ▸ CT 914 gateway ok</div>
-      <div><span class="t">12:47</span> git ▸ PR #10 merged</div>
-      <div><span class="t">12:31</span> net ▸ WAN 940/42 Mb/s</div>
-      <div><span class="t">12:20</span> cron ▸ digest delivered</div>
-    </div>
+  <div class="cell"><div class="dev"><div class="hdr">
+      <span class="c">J A R V I S</span><span>UTC <b>17:56</b></span><span>LOCAL <b>12:56</b></span><span class="d">EST</span></div>
+    <div class="stage"><svg id="g1" width="150" height="150"></svg></div>
+    <div class="logs"><div><span class="t">12:54</span> media ▸ 3 imports queued</div><div><span class="t">12:51</span> lab ▸ CT 914 gateway ok</div>
+      <div><span class="t">12:47</span> git ▸ PR #12 merged</div><div><span class="t">12:31</span> net ▸ WAN 940/42 Mb/s</div>
+      <div><span class="t">12:20</span> cron ▸ digest delivered</div></div>
+    <div class="side"><div class="k">STATUS</div><div class="m">globe · home<br>no pending events</div>
+      <div class="r">next sweep in 4 m</div></div>
     <div class="tag">IDLE</div>
-  </div><div class="cap"><b>1 · Idle — home</b><br>Dot-matrix globe centred on Boston. Day limb brighter than night. Clocks right of the title; scrolling log lower-left.</div></div>
+  </div><div class="cap"><b>1 · Idle — home</b><br>Circle fixed at x=100, y=120, r=56 in every state. Right column idle until something happens.</div></div>
 
-  <div class="cell"><div class="dev" id="d2">
-    <div class="hdr"><span class="c">J A R V I S</span><span>UTC <b>17:56</b></span><span>LOCAL <b>12:56</b></span><span class="d">EST</span></div>
-    <div class="mid"><div class="center" style="top:63%"><svg id="g2" width="132" height="132"></svg></div></div>
-    <div class="ping"><div class="k">◉ TOKYO · MARKETS</div><div class="h">Nikkei closes +1.8% on chip demand</div><div class="m">returning home in 8 s…</div></div>
-    <div class="logs"><div><span class="t">12:56</span> feed ▸ ping TOKYO 35.7N 139.7E</div><div><span class="t">12:54</span> lab ▸ backup verify ok</div><div><span class="t">12:51</span> media ▸ 3 imports queued</div></div>
+  <div class="cell"><div class="dev"><div class="hdr">
+      <span class="c">J A R V I S</span><span>UTC <b>17:56</b></span><span>LOCAL <b>12:56</b></span><span class="d">EST</span></div>
+    <div class="stage"><svg id="g2" width="150" height="150"></svg></div>
+    <div class="logs"><div><span class="t">12:56</span> feed ▸ ping TOKYO 35.7N</div><div><span class="t">12:54</span> lab ▸ backup verify ok</div>
+      <div><span class="t">12:51</span> media ▸ 3 imports queued</div></div>
+    <div class="side"><div class="k">◉ TOKYO · MARKETS</div><div class="h">Nikkei closes +1.8% on chip demand</div>
+      <div class="m">35.68N 139.69E<br>equities · asia session</div><div class="r">home in 8 s ▸</div></div>
     <div class="tag">EVENT</div>
-  </div><div class="cap"><b>2 · Idle + event ping</b><br>Globe swings to the dateline, ring pulses, headline holds ~8 s, then it returns home and pings there.</div></div>
+  </div><div class="cap"><b>2 · Idle + event</b><br>Same circle, same size, same place. Latitude stays level; the globe only turns in longitude, and the blurb lives in the right column.</div></div>
 
-  <div class="cell"><div class="dev" id="d3">
-    <div class="hdr"><span class="c">J A R V I S</span><span>UTC <b>17:57</b></span><span>LOCAL <b>12:57</b></span><span class="d">LISTENING</span></div>
-    <div class="mid"><div class="center"><svg id="m3" width="150" height="150"></svg></div></div>
-    <div class="logs" style="width:140px"><div><span class="t">12:57</span> wake ▸ “jarvis” 0.34</div><div><span class="t">12:57</span> vad ▸ speech detected</div></div>
+  <div class="cell"><div class="dev"><div class="hdr">
+      <span class="c">J A R V I S</span><span>UTC <b>17:57</b></span><span>LOCAL <b>12:57</b></span><span class="d">LISTENING</span></div>
+    <div class="stage"><svg id="m3" width="150" height="150"></svg></div>
+    <div class="logs" style="width:140px"><div><span class="t">12:57</span> wake ▸ “jarvis” 0.34</div><div><span class="t">12:57</span> vad ▸ speech</div></div>
+    <div class="side"><div class="k">LISTENING</div><div class="m">pulse travels inward — absorbing</div></div>
     <div class="tag">LISTEN</div>
-  </div><div class="cap"><b>3 · Conversation — listening</b><br>Same circle, no land. Iris widens, slit narrows to a filament, rings breathe outward.</div></div>
+  </div><div class="cap"><b>3 · Listening</b><br>Rings travel inward, from the rim to the core: the circle drawing the sound in.</div></div>
 </div>
 
 <div class="row" id="row2">
-  <div class="cell"><div class="dev" id="d4">
-    <div class="hdr"><span class="c">J A R V I S</span><span>UTC <b>17:57</b></span><span>LOCAL <b>12:57</b></span><span class="d">WORKING</span></div>
-    <div class="mid"><div class="center"><svg id="m4" width="150" height="150"></svg></div></div>
-    <div class="logs" style="width:150px"><div><span class="t">12:57</span> stt ▸ 1025 ms</div><div><span class="t">12:57</span> ack ▸ “Right.”</div><div><span class="t">12:57</span> brain ▸ tool: web</div></div>
+  <div class="cell"><div class="dev"><div class="hdr">
+      <span class="c">J A R V I S</span><span>UTC <b>17:57</b></span><span>LOCAL <b>12:57</b></span><span class="d">WORKING</span></div>
+    <div class="stage"><svg id="m4" width="150" height="150"></svg></div>
+    <div class="logs" style="width:150px"><div><span class="t">12:57</span> stt ▸ 1025 ms</div><div><span class="t">12:57</span> ack ▸ “Right.”</div>
+      <div><span class="t">12:57</span> brain ▸ tool: web</div></div>
+    <div class="side"><div class="k">WORKING</div><div class="m">flat rings, counter-rotating<br>speed = elapsed / 4 s</div></div>
     <div class="tag">THINK</div>
-  </div><div class="cap"><b>4 · Conversation — thinking</b><br>Plasma slows and sinks, pupil drifts up-left, orbit arcs appear. Where the 4–6 s goes.</div></div>
+  </div><div class="cap"><b>4 · Thinking</b><br>Flat spinning lines only — concentric arcs, no perspective, counter-rotating.</div></div>
 
-  <div class="cell"><div class="dev" id="d5">
-    <div class="hdr"><span class="c">J A R V I S</span><span>UTC <b>17:57</b></span><span>LOCAL <b>12:57</b></span><span class="d">SPEAKING</span></div>
-    <div class="mid"><div class="center"><svg id="m5" width="150" height="150"></svg></div></div>
-    <div class="logs" style="width:172px"><div><span class="t">12:57</span> say ▸ “Clear and dry over Winchester…”</div><div><span class="t">12:57</span> tts ▸ 4 sentences, 38 s</div></div>
+  <div class="cell"><div class="dev"><div class="hdr">
+      <span class="c">J A R V I S</span><span>UTC <b>17:57</b></span><span>LOCAL <b>12:57</b></span><span class="d">SPEAKING</span></div>
+    <div class="stage"><svg id="m5" width="150" height="150"></svg></div>
+    <div class="logs" style="width:172px"><div><span class="t">12:57</span> say ▸ “Clear and dry over Winchester…”</div>
+      <div><span class="t">12:57</span> tts ▸ 4 sentences, 38 s</div></div>
+    <div class="side"><div class="k">SPEAKING</div><div class="m">waves radiate outward,<br>fading with distance</div></div>
     <div class="tag">SPEAK</div>
-  </div><div class="cap"><b>5 · Conversation — speaking</b><br>Rim driven by the audio envelope; plasma is pushed outward on each syllable; slit opens on vowels.</div></div>
+  </div><div class="cap"><b>5 · Speaking</b><br>Wavefronts leave the rim outward and fade — the inverse of listening. Amplitude from the TTS envelope.</div></div>
 
-  <div class="cell"><div class="dev" id="d6">
-    <div class="hdr"><span class="c">J A R V I S</span><span>UTC <b>17:58</b></span><span>LOCAL <b>12:58</b></span><span class="d">ATTENTION</span></div>
-    <div class="mid"><div class="center"><svg id="m6" width="150" height="150"></svg></div></div>
-    <div class="logs" style="width:182px"><div><span class="t">12:58</span> alert ▸ PVE1 SMART warning</div><div><span class="t">12:58</span> lab ▸ disk 4 reallocated 12</div></div>
+  <div class="cell"><div class="dev"><div class="hdr">
+      <span class="c">J A R V I S</span><span>UTC <b>17:58</b></span><span>LOCAL <b>12:58</b></span><span class="d">ATTENTION</span></div>
+    <div class="stage"><svg id="m6" width="150" height="150"></svg></div>
+    <div class="logs" style="width:182px"><div><span class="t">12:58</span> alert ▸ PVE1 SMART warning</div><div><span class="t">12:58</span> lab ▸ disk 4 realloc 12</div></div>
+    <div class="side"><div class="k">ATTENTION</div><div class="h">PVE1 · disk 4 SMART warning</div><div class="m">12 reallocated sectors<br>threshold 0</div>
+      <div class="r">tap to dismiss</div></div>
     <div class="tag">ALERT</div>
-  </div><div class="cap"><b>6 · Attention</b><br>Amber core inside the green rim — the only place colour breaks. Things that actually need him.</div></div>
+  </div><div class="cap"><b>6 · Attention</b><br>Same geometry, amber core. The only state that breaks the green.</div></div>
 </div>
 
 <script>
 const NS="http://www.w3.org/2000/svg";
-function el(t,a,parent){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(parent)parent.appendChild(e);return e;}
+const R=56, CX=75, CY=75;               // circle geometry is identical in every state
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
 
-/* Rough continental footprints in lon/lat, rasterised to dots.
-   The device build bakes a proper Natural-Earth mask; this is the concept. */
-const LAND=[
-  [-100,45,30,17],[-75,40,11,9],[-112,35,9,8],[-152,63,11,7],[-95,15,8,5],
-  [-60,-12,12,19],[-66,-34,8,10],[-42,72,11,7],
-  [12,50,13,8],[16,62,6,6],[-4,40,5,4],
-  [20,6,17,15],[25,-20,12,14],[8,10,9,8],
-  [92,48,42,15],[103,25,15,10],[78,21,9,9],[105,10,10,6],[45,22,8,8],
-  [134,-25,15,8],[172,-42,4,4],[138,36,3,4],[-2,54,3,3],[112,-3,11,4],[9,45,6,6]
-];
-function isLand(lat,lon){
-  if(lat<-70) return true;
-  for(const [x,y,rx,ry] of LAND){
-    const dx=(lon-x)/rx, dy=(lat-y)/ry;
-    if(dx*dx+dy*dy <= 1) return true;
-  }
-  return false;
-}
-function globe(id,{cx,cy,r,lon0,lat0,marks=[],dots=64}){
-  const svg=document.getElementById(id);
-  const defs=el("defs",{},svg);
-  const g=el("radialGradient",{id:"og"+id,cx:"0.38",cy:"0.32",r:"0.85"},defs);
+/* ── globe ─────────────────────────────────────────────── */
+const LAND=[[-100,45,30,17],[-75,40,11,9],[-112,35,9,8],[-152,63,11,7],[-95,15,8,5],
+  [-60,-12,12,19],[-66,-34,8,10],[-42,72,11,7],[12,50,13,8],[16,62,6,6],[-4,40,5,4],
+  [20,6,17,15],[25,-20,12,14],[8,10,9,8],[92,48,42,15],[103,25,15,10],[78,21,9,9],
+  [105,10,10,6],[45,22,8,8],[134,-25,15,8],[172,-42,4,4],[138,36,3,4],[-2,54,3,3],[112,-3,11,4],[9,45,6,6]];
+const isLand=(lat,lon)=> lat<-70 || LAND.some(([x,y,rx,ry])=>((lon-x)/rx)**2+((lat-y)/ry)**2<=1);
+function globe(id,{lon0,lat0,marks=[],dots=64,ring=null}){
+  const svg=document.getElementById(id), defs=el("defs",{},svg);
+  const g=el("radialGradient",{id:"og"+id,cx:".38",cy:".32",r:".85"},defs);
   [["0%","#0b2b1e"],["55%","#061a12"],["100%","#020b07"]].forEach(([o,c])=>el("stop",{offset:o,"stop-color":c},g));
-  el("circle",{cx,cy,r,fill:"#04140d",stroke:"#2b7f5c","stroke-width":0.8,opacity:.9},svg);
-  el("circle",{cx,cy,r,fill:`url(#og${id})`},svg);
-
+  el("circle",{cx:CX+ (150/2-R-CX)+CX*0,cy:CY,r:R,fill:`url(#og${id})`},svg);
   const p0=lat0*Math.PI/180;
-  const proj=(lon,lat)=>{
-    const p=lat*Math.PI/180, l=(lon-lon0)*Math.PI/180;
-    const x=Math.cos(p)*Math.sin(l);
-    const y=Math.cos(p0)*Math.sin(p)-Math.sin(p0)*Math.cos(p)*Math.cos(l);
-    const z=Math.sin(p0)*Math.sin(p)+Math.cos(p0)*Math.cos(p)*Math.cos(l);
-    return {x:x*r,y:-y*r,z};
-  };
-  // ocean graticule, very faint
-  const grat=el("g",{stroke:"#1d5c41","stroke-width":0.4,fill:"none",opacity:.5},svg);
-  for(let lat=-60;lat<=60;lat+=30){
-    const p=proj(lon0,lat); const rr=Math.abs(r*Math.cos(lat*Math.PI/180));
-    el("ellipse",{cx:cx,cy:cy+p.y,rx:rr,ry:Math.max(0.6,rr*0.10)},grat);
-  }
-  // land dots
-  const nd=dots, landg=el("g",{},svg);
-  for(let i=0;i<nd;i++){
-    const lat=90-(i+0.5)*(180/nd);
-    const per=Math.max(6,Math.round(nd*Math.cos(lat*Math.PI/180)));
-    for(let j=0;j<per;j++){
-      const lon=-180+(j+0.5)*(360/per);
-      if(!isLand(lat,lon)) continue;
-      const p=proj(lon,lat);
-      if(p.z<=0.12) continue;
-      const a=0.28+0.62*p.z;
-      el("circle",{cx:cx+p.x,cy:cy+p.y,r:Math.max(0.55,r*0.016),fill:"#8affc4",opacity:a.toFixed(2)},landg);
-    }
-  }
-  // terminator: night-side veil
-  const veil=el("ellipse",{cx:cx+r*0.55,cy:cy-r*0.1,rx:r*1.05,ry:r*1.05,fill:"#020906",opacity:.32},svg);
-  veil.setAttribute("clip-path",`url(#clip${id})`);
-  const clip=el("clipPath",{id:"clip"+id},defs);
-  el("circle",{cx,cy,r},clip);
-  // rim + limb light
-  el("circle",{cx,cy,r,fill:"none",stroke:"#63f2a6","stroke-width":1,opacity:.75},svg);
-  el("circle",{cx,cy,r,fill:"none",stroke:"#b9ffd6","stroke-width":0.6,opacity:.25},svg);
-  // markers
-  marks.forEach(m=>{
-    const p=proj(m.lon,m.lat); if(p.z<=0.1) return;
-    el("circle",{cx:cx+p.x,cy:cy+p.y,r:m.home?2.2:1.5,fill:m.home?"#e6fff3":"#7df7bb"},svg);
-    if(m.home){
-      [6,11,17].forEach((d,i)=>el("circle",{cx:cx+p.x,cy:cy+p.y,r:d,fill:"none",stroke:"#9dffcf",
-        "stroke-width":i?0.5:0.9,opacity:(.85-i*0.25).toFixed(2)},svg));
-    }
-  });
+  const proj=(lon,lat)=>{const p=lat*Math.PI/180,l=(lon-lon0)*Math.PI/180;
+    return {x:R*Math.cos(p)*Math.sin(l), y:-R*(Math.cos(p0)*Math.sin(p)-Math.sin(p0)*Math.cos(p)*Math.cos(l)),
+            z:Math.sin(p0)*Math.sin(p)+Math.cos(p0)*Math.cos(p)*Math.cos(l)};};
+  const grat=el("g",{stroke:"#1d5c41","stroke-width":.4,fill:"none",opacity:.5},svg);
+  for(let lat=-60;lat<=60;lat+=30){const p=proj(lon0,lat),rr=Math.abs(R*Math.cos(lat*Math.PI/180));
+    el("ellipse",{cx:CX,cy:CY+p.y,rx:rr,ry:Math.max(.6,rr*.10)},grat);}
+  const land=el("g",{},svg);
+  for(let i=0;i<dots;i++){const lat=90-(i+.5)*(180/dots), per=Math.max(6,Math.round(dots*Math.cos(lat*Math.PI/180)));
+    for(let j=0;j<per;j++){const lon=-180+(j+.5)*(360/per); if(!isLand(lat,lon))continue;
+      const p=proj(lon,lat); if(p.z<=.12)continue;
+      el("circle",{cx:CX+p.x,cy:CY+p.y,r:Math.max(.55,R*.016),fill:"#8affc4",opacity:(.28+.62*p.z).toFixed(2)},land);}}
+  el("circle",{cx:CX,cy:CY,r:R,fill:"none",stroke:"#63f2a6","stroke-width":1,opacity:.75},svg);
+  marks.forEach(m=>{const p=proj(m.lon,m.lat); if(p.z<=.1)return;
+    el("circle",{cx:CX+p.x,cy:CY+p.y,r:m.home?2.2:1.5,fill:m.home?"#e6fff3":"#7df7bb"},svg);
+    if(m.home)[6,11,17].forEach((d,i)=>el("circle",{cx:CX+p.x,cy:CY+p.y,r:d,fill:"none",stroke:"#9dffcf",
+      "stroke-width":i?.5:.9,opacity:(.85-i*.25).toFixed(2)},svg));});
+  if(ring) ring.forEach(([d,op])=>el("circle",{cx:CX,cy:CY,r:R+d,fill:"none",stroke:"#8fffc4","stroke-width":.8,opacity:op},svg));
 }
-globe("g1",{cx:88,cy:88,r:74,lon0:-71,lat0:42,
-  marks:[{lon:-71.06,lat:42.36,home:true},{lon:-74,lat:40.7},{lon:-0.12,lat:51.5},{lon:139.7,lat:35.7},{lon:151.2,lat:-33.9}]});
-globe("g2",{cx:66,cy:66,r:56,lon0:130,lat0:20,marks:[{lon:139.69,lat:35.68,home:true}]});
+globe("g1",{lon0:-71,lat0:42,marks:[{lon:-71.06,lat:42.36,home:true},{lon:-74,lat:40.7},{lon:-.12,lat:51.5},{lon:139.7,lat:35.7}]});
+globe("g2",{lon0:139.69,lat0:42,marks:[{lon:139.69,lat:35.68,home:true}],ring:[[4,.55],[9,.32],[15,.16]]});
 
-/* ── the marble ───────────────────────────────────────────── */
-function marble(id,{cx,cy,r,mood}){
+/* ── marble ─────────────────────────────────────────────── */
+function marble(id,{mood}){
   const svg=document.getElementById(id);
-  const pal={
-    listen:{core:"#9dffd0",mid:"#1c9c66",edge:"#06241a",slit:"#e9fff5",ring:"#63f2a6"},
-    think:{core:"#5fd7a1",mid:"#116049",edge:"#04170f",slit:"#a8f6d4",ring:"#4fd39a"},
-    speak:{core:"#c6ffe6",mid:"#2fbf83",edge:"#062e1f",slit:"#f2fffa",ring:"#8fffc4"},
-    alert:{core:"#ffd9a0",mid:"#9a6425",edge:"#241305",slit:"#fff3dd",ring:"#ffb45c"}
-  }[mood];
-  const defs=el("defs",{},svg);
-  const clip=el("clipPath",{id:"c"+id},defs); el("circle",{cx,cy,r},clip);
-
-  const filt=el("filter",{id:"f"+id,x:"-25%",y:"-25%",width:"150%",height:"150%"},defs);
-  el("feTurbulence",{type:"fractalNoise",baseFrequency: mood==="think"?"0.010 0.017":"0.018 0.026",
-    numOctaves:"4",seed: mood==="listen"?7:mood==="think"?23:mood==="speak"?5:13,result:"n"},filt);
-  el("feDisplacementMap",{in:"SourceGraphic",in2:"n",scale: mood==="speak"?22:16,
+  const pal={listen:{core:"#9dffd0",mid:"#1c9c66",edge:"#06241a",slit:"#e9fff5",ring:"#63f2a6"},
+             think:{core:"#5fd7a1",mid:"#116049",edge:"#04170f",slit:"#a8f6d4",ring:"#4fd39a"},
+             speak:{core:"#c6ffe6",mid:"#2fbf83",edge:"#062e1f",slit:"#f2fffa",ring:"#8fffc4"},
+             alert:{core:"#ffd9a0",mid:"#9a6425",edge:"#241305",slit:"#fff3dd",ring:"#ffb45c"}}[mood];
+  const defs=el("defs",{},svg), clip=el("clipPath",{id:"c"+id},defs); el("circle",{cx:CX,cy:CY,r:R},clip);
+  const filt=el("filter",{id:"f"+id,x:"-30%",y:"-30%",width:"160%",height:"160%"},defs);
+  el("feTurbulence",{type:"fractalNoise",baseFrequency:mood==="think"?"0.008 0.014":"0.014 0.02",
+    numOctaves:"4",seed:mood==="listen"?7:mood==="think"?23:mood==="speak"?5:13,result:"n"},filt);
+  el("feDisplacementMap",{in:"SourceGraphic",in2:"n",scale:mood==="speak"?26:20,
     xChannelSelector:"R",yChannelSelector:"G"},filt);
-
-  const rg=el("radialGradient",{id:"b"+id,cx:".5",cy:".42",r:".58"},defs);
-  [["0%",pal.core],["34%",pal.mid],["76%",pal.edge],["100%","#010806"]].forEach(([o,c])=>
-    el("stop",{offset:o,"stop-color":c},rg));
-
+  const rg=el("radialGradient",{id:"b"+id,cx:".5",cy:".45",r:".62"},defs);
+  [["0%",pal.core],["30%",pal.mid],["74%",pal.edge],["100%","#010806"]].forEach(([o,c])=>el("stop",{offset:o,"stop-color":c},rg));
   const body=el("g",{"clip-path":`url(#c${id})`},svg);
-  el("circle",{cx,cy,r,fill:`url(#b${id})`},body);
+  el("circle",{cx:CX,cy:CY,r:R,fill:`url(#b${id})`},body);
+  // lava-lamp blobs: fewer, larger, slower
+  const cells=[[-.22,-.30,.46,.34],[.24,.10,.44,.30],[-.10,.44,.36,.26],[.10,-.52,.30,.22]];
+  cells.forEach(([dx,dy,rr,op],i)=>el("circle",{cx:CX+dx*R,cy:CY+dy*R,r:rr*R,
+    fill:i%2?"#2fd08d":"#a6ffd6",opacity:(mood==="think"?op*.72:op).toFixed(2),filter:`url(#f${id})`},body));
+  const h=mood==="listen"?R*.10:mood==="speak"?R*.20:mood==="alert"?R*.28:R*.13;
+  const w=mood==="listen"?R*.72:mood==="speak"?R*.60:R*.70;
+  el("ellipse",{cx:CX,cy:mood==="think"?CY-R*.09:CY,rx:w,ry:h,fill:pal.slit,opacity:.5,
+    filter:`url(#f${id})`,style:"mix-blend-mode:screen"},body);
+  el("ellipse",{cx:CX-R*.30,cy:CY-R*.38,rx:R*.18,ry:R*.09,fill:"#fff",opacity:.10,
+    transform:`rotate(-28 ${CX-R*.30} ${CY-R*.38})`},body);
+  el("circle",{cx:CX,cy:CY,r:R,fill:"none",stroke:pal.ring,"stroke-width":mood==="listen"?1.8:1.1,opacity:.9},svg);
 
-  // plasma cells
-  const cells=[[-.28,-.22,.40,.30],[.26,.06,.34,.26],[-.04,.40,.30,.22],[.12,-.46,.24,.20],[-.44,.22,.20,.18],[.36,-.30,.18,.16]];
-  cells.forEach(([dx,dy,rr,op],i)=>{
-    el("circle",{cx:cx+dx*r,cy:cy+dy*r,r:rr*r,fill:i%2?"#2fd08d":"#a6ffd6",
-      opacity:(mood==="think"?op*.7:op).toFixed(2),filter:`url(#f${id})`},body);
-  });
-  // iris ring
-  el("circle",{cx,cy,r:r*0.52,fill:"none",stroke:pal.slit,"stroke-width":0.7,opacity:.30},body);
-  el("circle",{cx,cy,r:r*0.30,fill:"none",stroke:pal.slit,"stroke-width":0.5,opacity:.22},body);
-
-  // the slit / pupil: a lens
-  const h = mood==="listen"? r*0.10 : mood==="speak"? r*0.22 : mood==="alert"? r*0.30 : r*0.14;
-  const w = mood==="listen"? r*0.78 : mood==="speak"? r*0.66 : r*0.72;
-  const px = mood==="think"? cx-r*0.09 : cx, py = mood==="think"? cy-r*0.11 : cy;
-  el("ellipse",{cx:px,cy:py,rx:w,ry:h,fill:pal.slit,opacity:.55,filter:`url(#f${id})`,
-    style:"mix-blend-mode:screen"},body);
-  // specular
-  el("ellipse",{cx,cy,rx:r*0.14,ry:r*0.09,fill:pal.slit,opacity:.55,filter:`url(#f${id})`},body);
-  el("ellipse",{cx:cx-r*0.34,cy:cy-r*0.42,rx:r*0.20,ry:r*0.10,fill:"#ffffff",opacity:.10,
-    transform:`rotate(-28 ${cx-r*0.34} ${cy-r*0.42})`},body);
-
-  // rim
-  el("circle",{cx,cy,r,fill:"none",stroke:pal.ring,"stroke-width":mood==="listen"?1.8:1.1,opacity:.9},svg);
-  if(mood==="think") [0,1,2].forEach(i=>{
-    const t=el("circle",{cx,cy,r:r+5+i*4.5,fill:"none",stroke:pal.ring,"stroke-width":0.5,
-      "stroke-dasharray":`${8+i*5} ${15+i*7}`,opacity:(.55-i*.14).toFixed(2)},svg);
-  });
-  if(mood==="listen") [4,9,14].forEach((d,i)=>{
-    el("circle",{cx,cy,r:r+d,fill:"none",stroke:pal.ring,"stroke-width":0.55,opacity:(.42-i*.11).toFixed(2)},svg);
-  });
-  if(mood==="speak"){
-    let d=""; const N=64;
-    for(let i=0;i<=N;i++){
-      const a=-Math.PI/2+i/N*2*Math.PI;
-      const amp=2.5+3.2*Math.abs(Math.sin(i*1.9))*Math.abs(Math.cos(i*0.7));
-      const rr=r+2+amp;
-      d+=(i?"L":"M")+(cx+Math.cos(a)*rr).toFixed(1)+" "+(cy+Math.sin(a)*rr).toFixed(1);
-    }
-    el("path",{d,fill:"none",stroke:"#c7ffe6","stroke-width":1,opacity:.85},svg);
+  if(mood==="listen"){                       // absorbing: rings march inward
+    [[18,.18],[12,.32],[6,.5],[2,.68]].forEach(([d,op])=>el("circle",{cx:CX,cy:CY,r:R+d,fill:"none",
+      stroke:pal.ring,"stroke-width":1,opacity:op},svg));
+  }
+  if(mood==="think"){                        // flat, counter-rotating arcs
+    [[3,0,"26 34"],[9,120,"34 46"],[15,250,"40 58"]].forEach(([d,rot,dash],i)=>{
+      const p=el("path",{d:`M ${CX-(R+d)} ${CY} A ${R+d} ${R+d} 0 1 1 ${CX+(R+d)} ${CY}`,
+        fill:"none",stroke:pal.ring,"stroke-width":1.2,"stroke-dasharray":dash,opacity:(.55-i*.13).toFixed(2)},
+        svg); p.setAttribute("transform",`rotate(${rot} ${CX} ${CY})`);});
+  }
+  if(mood==="speak"){                        // radiating, fading outward
+    [[4,.55],[11,.34],[18,.20],[26,.11]].forEach(([d,op])=>{
+      let p="",N=56; for(let i=0;i<=N;i++){const a=-Math.PI+i/N*2*Math.PI;
+        const amp=(2.2+2.6*Math.abs(Math.sin(i*1.7)))*(1-d/34); const rr=R+d+amp;
+        p+=(i?"L":"M")+(CX+Math.cos(a)*rr).toFixed(1)+" "+(CY+Math.sin(a)*rr).toFixed(1);}
+      el("path",{d:p,fill:"none",stroke:pal.ring,"stroke-width":1,opacity:op},svg);});
   }
 }
-marble("m3",{cx:75,cy:75,r:62,mood:"listen"});
-marble("m4",{cx:75,cy:75,r:62,mood:"think"});
-marble("m5",{cx:75,cy:75,r:62,mood:"speak"});
-marble("m6",{cx:75,cy:75,r:62,mood:"alert"});
-</script>
-</body></html>
+marble("m3",{mood:"listen"}); marble("m4",{mood:"think"}); marble("m5",{mood:"speak"}); marble("m6",{mood:"alert"});
+</script></body></html>
