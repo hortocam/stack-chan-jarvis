@@ -17,6 +17,26 @@ The panel is **320 × 240 px, 2.0-inch, SPI (ILI9342C)** with 8 MB PSRAM behind 
 | Text | 7.5–9 px monospace | the log column is ~24 characters wide, 5 lines |
 | Palette | 5 greens + one amber | dithering, not gradients, at this colour depth |
 
+## Layout rules (owner feedback, 2026-11-01 — these are constraints, not preferences)
+
+1. **The circle never moves and never resizes.** Fixed at `cx=100, cy=120, r=56` in *every*
+   state, idle and conversation alike. Nothing — headline, transcript, alert — is allowed to
+   push, shrink or recentre it. If something must appear, it appears *over* or *beside*.
+2. **Event blurbs are an overlay in the right column** (`x ≥ 178`), using the real estate that
+   is empty in idle. The globe keeps **latitude centred and rotates only in longitude**, so
+   the right-hand column is always free and a ping never needs to move anything.
+3. **Motion vocabulary — direction carries meaning:**
+
+   | State | Motion |
+   |---|---|
+   | Listening | rings travel **inward**, rim → core: the circle drawing sound in |
+   | Thinking | **flat** spinning arcs, no perspective, counter-rotating |
+   | Speaking | wavefronts radiate **outward** from the rim and **fade with distance** |
+   | Attention | heavy, slow, amber; nothing radiates |
+
+4. **The marble is a lava lamp**, not a crystal ball: two or three large slow blobs drifting
+   behind a soft slit — not glitter, not a starfield, not a static gradient.
+
 ## Layout (shared by both modes)
 
 ```
